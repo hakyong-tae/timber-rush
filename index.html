@@ -285,6 +285,20 @@
           <span class="vol-val" id="bgm-vol-label">50%</span>
         </div>
       </div>
+
+    <!-- SFX Volume -->
+    <div class="settings-section">
+      <h3>SFX</h3>
+      <div class="settings-row">
+        <span class="settings-label" data-i18n="sfxVolume">효과음 볼륨</span>
+        <div class="vol-wrap">
+          <span style="font-size:16px">🔊</span>
+          <input type="range" id="sfx-volume" min="0" max="100" value="50"
+            oninput="onSfxVolume(this.value)">
+          <span class="vol-val" id="sfx-vol-label">50%</span>
+        </div>
+      </div>
+    </div>
       <!-- Now Playing -->
       <div class="settings-row" style="margin-top:-4px">
         <span class="settings-label" style="font-size:12px;color:#6b7280" data-i18n="nowPlaying">현재 재생</span>

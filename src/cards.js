@@ -34,10 +34,11 @@ export const CARD_POOL = [
   {
     id: 'robot_collector', tier: 'uncommon', icon: '🤖',
     name: '로봇 수집기',
-    desc: '통나무를 자동 수집하는 로봇 +1대 (중복 가능)',
+    desc: '통나무를 자동 수집하는 로봇 +1대 (최대 10대)',
     stackable: true,    // can be picked multiple times
     minRound: 10,       // only appears from round 10 onwards
-    apply: s => { s.robotCount = (s.robotCount || 0) + 1 },
+    maxStack: 10,       // hide once player has 10 robots
+    apply: s => { s.robotCount = Math.min((s.robotCount || 0) + 1, 10) },
   },
 ]
 
@@ -48,6 +49,7 @@ export function drawCards(count=3, curRound=1) {
   const available = CARD_POOL.filter(c => {
     if (c.minRound && curRound < c.minRound) return false
     if (!c.stackable && run.cards.includes(c.id)) return false
+    if (c.maxStack !== undefined && (run.robotCount || 0) >= c.maxStack) return false
     return true
   })
   if (available.length === 0) return CARD_POOL.slice(0, count)
@@ -55,8 +57,8 @@ export function drawCards(count=3, curRound=1) {
   const drawn = []
   const pool = [...available]
 
-  // ── 라운드 10 첫 진입: 로봇 카드 무조건 1장 보장 ──
-  if (curRound === 10) {
+  // ── 라운드 10 첫 진입: 로봇 카드 무조건 1장 보장 (최대 10대 미만일 때만) ──
+  if (curRound === 10 && (run.robotCount || 0) < 10) {
     const robotCard = CARD_POOL.find(c => c.id === 'robot_collector')
     if (robotCard) {
       drawn.push(robotCard)

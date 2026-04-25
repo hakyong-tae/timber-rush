@@ -3,7 +3,7 @@ import * as BGM from './bgm.js'
 import { Tree, pickTreeType } from './tree.js'
 import { drawCards, applyCard, CARD_POOL } from './cards.js'
 import { checkAchievements, renderAchievements } from './achievements.js'
-import { renderSkillTree } from './skilltree.js'
+import { renderSkillTree, SKILL_NODES } from './skilltree.js'
 import lumberjackSrc from './assets/lumberjack.png'
 import robotSrc      from './assets/robot.png'
 import collectSoundSrc from './assets/collect.mp3'
@@ -23,12 +23,16 @@ Object.entries(_bgSrcs).forEach(([path, src]) => {
 })
 
 // ── Sound system — pooled Audio so rapid hits never cut off ──
-function _makePool(src, vol, size) {
+let _sfxVolume = parseFloat(localStorage.getItem('sfx_volume') ?? '0.5')
+
+function _makePool(src, baseVol, size) {
   return {
-    pool: Array.from({ length: size }, () => { const a = new Audio(src); a.volume = vol; return a }),
+    pool: Array.from({ length: size }, () => { const a = new Audio(src); a.volume = baseVol * _sfxVolume; return a }),
+    baseVol,
     idx: 0,
     play() {
       const a = this.pool[this.idx++ % this.pool.length]
+      a.volume = this.baseVol * _sfxVolume
       a.currentTime = 0
       a.play().catch(() => {})
     }
@@ -39,6 +43,12 @@ const sfxChop    = _makePool(chopSoundSrc,    0.45, 4)
 
 function playSfxCollect() { sfxCollect.play() }
 function playSfxChop()    { sfxChop.play() }
+
+export function setSfxVolume(v) {
+  _sfxVolume = Math.max(0, Math.min(1, v))
+  localStorage.setItem('sfx_volume', _sfxVolume)
+}
+export function getSfxVolume() { return _sfxVolume }
 
 // ── Canvas ──
 const canvas = document.getElementById('game-canvas')
@@ -68,9 +78,9 @@ function resizeCanvas() {
   canvas.style.width  = gw + 'px'
   canvas.style.height = gh + 'px'
 
-  // HUD 스케일: 480px 기준, 최소 0.55 최대 2.5
-  HUD_SCALE = Math.max(0.55, Math.min(2.5, gw / 480))
-  XP_BAR_W  = Math.round(52 * HUD_SCALE)
+  // HUD 스케일: 480px 기준, 최소 0.55 최대 1.6 (크게 키울수록 요소 겹침 발생)
+  HUD_SCALE = Math.max(0.55, Math.min(1.6, gw / 480))
+  XP_BAR_W  = Math.round(26 * HUD_SCALE)   // 50% 축소
 
   GROUND_Y = gh * 0.87
 
@@ -484,49 +494,48 @@ function syncWorkers() {
 
 // ── Robot sprite sheet ──
 // 레이아웃: 9컬럼 × 4행, 프레임 크기 153×192px, 배경 마젠타
-const ROBOT_COLS   = 9
-const ROBOT_ROWS   = 4
-const ROBOT_FW     = 153   // frame width  (1377 / 9)
-const ROBOT_FH     = 192   // frame height (768 / 4)
-const ROBOT_FPS    = 8     // 초당 프레임 수
-// 4행 스프라이트: 0=아래(정면), 1=왼쪽, 2=오른쪽, 3=위(뒷모습)
-// 오른쪽 걷기 행 사용 → 반전으로 왼쪽도 커버
-const ROBOT_WALK_ROW = 2
-
-// 마젠타 배경 제거 후 offscreen canvas에 캐싱
-const _robotFrames = []    // { canvas } 배열 — 초기화 후 채워짐
+// ── 로봇 단일 이미지 — 마젠타 배경 제거 후 캐싱 ──
+let _robotCanvas = null   // 배경 제거된 offscreen canvas
 
 const _robotSrcImg = new Image()
 _robotSrcImg.onload = () => {
-  const oc = document.createElement('canvas')
-  oc.width  = _robotSrcImg.naturalWidth
-  oc.height = _robotSrcImg.naturalHeight
+  const W = _robotSrcImg.naturalWidth, H = _robotSrcImg.naturalHeight
+  const oc  = document.createElement('canvas')
+  oc.width  = W; oc.height = H
   const oc2 = oc.getContext('2d')
   oc2.drawImage(_robotSrcImg, 0, 0)
-  const fullData = oc2.getImageData(0, 0, oc.width, oc.height)
-  const d = fullData.data
+  const imgData = oc2.getImageData(0, 0, W, H)
+  const d       = imgData.data
 
-  // 코너 색상(마젠타)을 배경으로 삼아 투명 처리
-  const bg = { r: d[0], g: d[1], b: d[2] }
-  const tol = 80
+  // 마젠타 배경 제거
+  const bg  = { r: d[0], g: d[1], b: d[2] }
+  const tol = 90
   for (let i = 0; i < d.length; i += 4) {
     if (Math.abs(d[i]-bg.r) <= tol && Math.abs(d[i+1]-bg.g) <= tol && Math.abs(d[i+2]-bg.b) <= tol)
       d[i+3] = 0
   }
-  oc2.putImageData(fullData, 0, 0)
+  oc2.putImageData(imgData, 0, 0)
 
-  // 걷기 행(ROBOT_WALK_ROW)의 각 프레임을 개별 캔버스로 잘라내기
-  for (let col = 0; col < ROBOT_COLS; col++) {
-    const fc = document.createElement('canvas')
-    fc.width  = ROBOT_FW
-    fc.height = ROBOT_FH
-    const fc2 = fc.getContext('2d')
-    fc2.drawImage(oc,
-      col * ROBOT_FW, ROBOT_WALK_ROW * ROBOT_FH, ROBOT_FW, ROBOT_FH,
-      0, 0, ROBOT_FW, ROBOT_FH
-    )
-    _robotFrames.push(fc)
+  // 불투명 픽셀 바운딩박스 계산 → 여백 자동 크롭
+  let minX = W, maxX = 0, minY = H, maxY = 0
+  for (let y = 0; y < H; y++) {
+    for (let x = 0; x < W; x++) {
+      if (d[(y * W + x) * 4 + 3] > 10) {
+        if (x < minX) minX = x
+        if (x > maxX) maxX = x
+        if (y < minY) minY = y
+        if (y > maxY) maxY = y
+      }
+    }
   }
+
+  // 크롭된 캔버스 생성
+  const cw = maxX - minX + 1, ch = maxY - minY + 1
+  const cropped  = document.createElement('canvas')
+  cropped.width  = cw
+  cropped.height = ch
+  cropped.getContext('2d').drawImage(oc, minX, minY, cw, ch, 0, 0, cw, ch)
+  _robotCanvas = cropped
 }
 _robotSrcImg.src = robotSrc
 
@@ -595,28 +604,45 @@ class LogRobot {
 
   draw() {
     const h  = CHAR_RENDER_H
-    const y  = GROUND_Y   // robot feet at ground
+    const bob = Math.sin(this.animTimer * 0.0025) * 3
 
-    ctx.save()
-    ctx.translate(this.x, y)
+    if (_robotCanvas) {
+      const rh = h * 0.84
+      const rw = rh * (_robotCanvas.width / _robotCanvas.height)
+      // 발이 땅에 닿도록: 이미지 하단을 GROUND_Y보다 rh*0.18만큼 아래에 그려 발을 땅속에 약간 묻힘
+      const drawBottom = GROUND_Y + rh * 0.18 + bob
+      const drawTop    = drawBottom - rh
 
-    // Flip to face movement direction
-    if (this.dir < 0) ctx.scale(-1, 1)
+      // Ground shadow ellipse (world-space, no flip needed)
+      ctx.save()
+      ctx.fillStyle = 'rgba(0,0,0,0.28)'
+      ctx.beginPath()
+      ctx.ellipse(this.x, GROUND_Y + 2, rw * 0.38, 5, 0, 0, Math.PI * 2)
+      ctx.fill()
+      ctx.restore()
 
-    if (_robotFrames.length > 0) {
-      // ── 스프라이트 시트 애니메이션 ──
-      // animTimer는 ms 단위 누적 → 1000/FPS ms 마다 1프레임 전진
-      const frameIdx = Math.floor(this.animTimer / (1000 / ROBOT_FPS)) % _robotFrames.length
-      const frame = _robotFrames[frameIdx]
-      const rh = h * 1.3
-      const rw = rh * (ROBOT_FW / ROBOT_FH)
-      ctx.drawImage(frame, -rw / 2, -rh, rw, rh)
+      ctx.save()
+      if (this.dir < 0) {
+        ctx.setTransform(-1, 0, 0, 1, this.x, 0)
+      } else {
+        ctx.translate(this.x, 0)
+      }
+      ctx.drawImage(_robotCanvas, -rw / 2, drawTop, rw, rh)
+      ctx.restore()
     } else {
-      // ── 로딩 전 fallback ──
+      ctx.save()
+      ctx.translate(this.x, 0)
       ctx.fillStyle = '#4a8aaa'
-      ctx.fillRect(-16, -h, 32, h)
+      ctx.fillRect(-16, GROUND_Y - h, 32, h)
+      ctx.restore()
     }
 
+    ctx.save()
+    if (this.dir < 0) {
+      ctx.setTransform(-1, 0, 0, 1, this.x, 0)
+    } else {
+      ctx.translate(this.x, 0)
+    }
     // Collection beam indicator (glows when _sparkTimer active)
     if (this._sparkTimer > 0) {
       const beamAlpha = Math.min(1, this._sparkTimer / 8) * 0.7
@@ -624,8 +650,8 @@ class LogRobot {
       ctx.lineWidth = 3
       ctx.setLineDash([4, 3])
       ctx.beginPath()
-      ctx.moveTo(0, -h * 0.30)
-      ctx.lineTo(0, 0)
+      ctx.moveTo(0, GROUND_Y - h * 0.50)
+      ctx.lineTo(0, GROUND_Y)
       ctx.stroke()
       ctx.setLineDash([])
     }
@@ -644,9 +670,10 @@ class LogRobot {
   }
 }
 
+const MAX_ROBOTS = 10
 let _robots = []
 function syncRobots() {
-  const need = run.robotCount || 0
+  const need = Math.min(run.robotCount || 0, MAX_ROBOTS)
   while (_robots.length < need) _robots.push(new LogRobot(_robots.length))
   if (_robots.length > need) _robots.length = need
 }
@@ -657,24 +684,42 @@ document.addEventListener('keydown', e => {
   if (['ArrowLeft','ArrowRight','a','d','A','D'].includes(e.key)) e.preventDefault()
   keys[e.key] = true
 
-  // ── Debug: G = 라운드 타이머 즉시 종료 ──
+  // ════════════════════════════════════════
+  //  DEBUG KEYS (개발용 — 배포 시 제거 가능)
+  //  G : 라운드 즉시 종료
+  //  H : 레벨 즉시 업
+  //  T : 모든 스킬 맥스 + 자원 충전 + 스탯 최대 적용
+  // ════════════════════════════════════════
   if (e.key === 'g' || e.key === 'G') {
     if (gamePhase === 'running') {
       runTimer = 0
-      spawnFloat(canvas.width / 2, canvas.height * 0.3, '🛠 DEBUG: 라운드 종료', '#ff6b6b', 18)
+      spawnFloat(canvas.width / 2, canvas.height * 0.3, '🛠 라운드 종료', '#ff6b6b', 18)
     }
   }
 
-  // ── Debug: H = 즉시 레벨업 ──
   if (e.key === 'h' || e.key === 'H') {
     if (gamePhase === 'running') {
-      const needed = run.xpToNext - run.xp
-      const leveled = addXP(needed)
+      const leveled = addXP(run.xpToNext - run.xp)
       if (leveled) {
-        spawnFloat(canvas.width / 2, canvas.height * 0.3, `🛠 DEBUG: 레벨 ${run.level}`, '#a78bfa', 18)
+        spawnFloat(canvas.width / 2, canvas.height * 0.3, `🛠 레벨 ${run.level}`, '#a78bfa', 18)
         triggerLevelUp()
       }
     }
+  }
+
+  if (e.key === 't' || e.key === 'T') {
+    // 자원 충전
+    persist.logs = 999999
+    persist.gold = 999999
+    // 모든 스킬 맥스
+    SKILL_NODES.forEach(n => { persist.skillLevels[n.id] = n.maxLv })
+    // 현재 런에도 즉시 반영
+    resetRun()
+    // 로봇 반영
+    _robots = []
+    syncRobots()
+    spawnFloat(canvas.width / 2, canvas.height * 0.3, '🛠 ALL SKILLS MAX', '#ffd700', 22)
+    updateHUD()
   }
 })
 document.addEventListener('keyup', e => { keys[e.key] = false })
@@ -1214,13 +1259,13 @@ window.gameLanguage = localStorage.getItem('gameLanguage') || 'ko'
 const I18N = {
   ko: {
     settings:'설정', language:'언어 / Language', selectLang:'언어 선택',
-    volume:'볼륨', nowPlaying:'현재 재생', playlist:'플레이리스트',
+    volume:'볼륨', sfxVolume:'효과음 볼륨', nowPlaying:'현재 재생', playlist:'플레이리스트',
     noTracks:'src/assets/bgm/ 폴더에 mp3 파일을 넣어주세요',
     danger:'위험', giveUp:'🏳️ 런 포기', close:'✕ 닫기',
   },
   en: {
     settings:'Settings', language:'Language', selectLang:'Select Language',
-    volume:'Volume', nowPlaying:'Now Playing', playlist:'Playlist',
+    volume:'Volume', sfxVolume:'SFX Volume', nowPlaying:'Now Playing', playlist:'Playlist',
     noTracks:'Add mp3 files to src/assets/bgm/ folder',
     danger:'Danger Zone', giveUp:'🏳️ Give Up Run', close:'✕ Close',
   },
@@ -1272,6 +1317,11 @@ window.onBgmVolume = (v) => {
   refreshBgmUI()
 }
 
+window.onSfxVolume = (v) => {
+  setSfxVolume(v / 100)
+  document.getElementById('sfx-vol-label').textContent = `${v}%`
+}
+
 // BGM 플레이리스트 UI 렌더
 window.refreshBgmUI = () => {
   const list = document.getElementById('bgm-playlist-list')
@@ -1280,13 +1330,22 @@ window.refreshBgmUI = () => {
 
   if (nowEl) nowEl.textContent = BGM.getCurrentName()
 
-  // 볼륨 슬라이더 동기화
+  // BGM 볼륨 슬라이더 동기화
   const volSlider = document.getElementById('bgm-volume')
   const volLabel  = document.getElementById('bgm-vol-label')
   if (volSlider) {
     const vPct = Math.round(BGM.getVolume() * 100)
     volSlider.value = vPct
     if (volLabel) volLabel.textContent = `${vPct}%`
+  }
+
+  // SFX 볼륨 슬라이더 동기화
+  const sfxSlider = document.getElementById('sfx-volume')
+  const sfxLabel  = document.getElementById('sfx-vol-label')
+  if (sfxSlider) {
+    const sfxPct = Math.round(getSfxVolume() * 100)
+    sfxSlider.value = sfxPct
+    if (sfxLabel) sfxLabel.textContent = `${sfxPct}%`
   }
 
   if (BGM.playlist.length === 0) {
@@ -1698,12 +1757,12 @@ function drawCanvasHUD() {
   const pct = Math.min(1, run.xp / (run.xpToNext || 1))
 
   // ─── Left XP wooden column ───
-  const barX   = Math.round(8 * S)
-  const lvR    = Math.round(22 * S)   // level circle radius
-  const lvCY   = Math.round(40 * S)   // level circle centre y
+  const barX   = Math.round(5 * S)
+  const lvR    = Math.round(11 * S)   // level circle radius (50% 축소)
+  const lvCY   = Math.round(20 * S)   // level circle centre y (50% 축소)
   const barTop = lvCY + lvR + Math.round(6 * S)
   const barW   = XP_BAR_W
-  const barH   = h - barTop - Math.round(14 * S)
+  const barH   = Math.round((h - barTop - Math.round(14 * S)) * 0.5)   // 길이 50%
 
   // Column background
   _woodBox(barX, barTop, barW, barH, 6)
@@ -1725,8 +1784,8 @@ function drawCanvasHUD() {
   }
 
   // Metal bolt rivets
-  const lx2 = barX + Math.round(10 * S), rx2 = barX + barW - Math.round(10 * S)
-  const rivetR = Math.max(2, Math.round(4.5 * S))
+  const lx2 = barX + Math.round(5 * S), rx2 = barX + barW - Math.round(5 * S)
+  const rivetR = Math.max(1, Math.round(2 * S))
   ;[barTop + 12, barTop + barH * 0.35, barTop + barH * 0.68, barTop + barH - 12].forEach(by2 => {
     ;[lx2, rx2].forEach(bx2 => {
       ctx.fillStyle = '#666'; ctx.beginPath(); ctx.arc(bx2, by2, rivetR, 0, Math.PI*2); ctx.fill()
@@ -1746,38 +1805,46 @@ function drawCanvasHUD() {
   ctx.strokeStyle = '#5a2000'; ctx.lineWidth = 2
   ctx.beginPath(); ctx.arc(lcx, lvCY, lvR, 0, Math.PI*2); ctx.stroke()
   ctx.fillStyle = '#fff'
-  const lvFontSz = Math.round((run.level >= 10 ? 13 : 16) * S)
+  const lvFontSz = Math.round((run.level >= 10 ? 7 : 8) * S)
   ctx.font = `bold ${lvFontSz}px "Courier New"`
   ctx.textAlign = 'center'; ctx.textBaseline = 'middle'
   ctx.fillText(run.level, lcx, lvCY + 1)
 
   // ─── Resources box (top-left, right of XP bar) ───
+  // 최대 너비: canvas의 23% 또는 스케일값 중 작은 쪽 → 타이머와 절대 안 겹침
   const rsX = barX + barW + Math.round(6 * S)
-  const rsW = Math.round(180 * S), rsH = Math.round(56 * S)
+  const rsW = Math.min(Math.round(180 * S), Math.round(w * 0.23))
+  const rsH = Math.min(Math.round(56 * S), Math.round(w * 0.075))
   _woodBox(rsX, 6, rsW, rsH, 6)
-  const rsFontSz  = Math.round(18 * S)
-  const rsIconOff = Math.round(10 * S)
-  const rsTextOff = Math.round(36 * S)
+  const rsFontSz  = Math.round(Math.min(18 * S, rsH * 0.36))
+  const rsIconOff = Math.round(rsW * 0.06)
+  const rsTextOff = Math.round(rsW * 0.22)
   ctx.textAlign = 'left'; ctx.textBaseline = 'middle'
   ctx.font = `bold ${rsFontSz}px "Courier New"`
   ctx.fillStyle = '#e8e0c0'
   ctx.fillText('🪵', rsX + rsIconOff, 6 + rsH * 0.30)
   ctx.fillStyle = '#fff'
   ctx.fillText(fmt(persist.logs), rsX + rsTextOff, 6 + rsH * 0.30)
-  ctx.font = `bold ${Math.round(17 * S)}px "Courier New"`
+  ctx.font = `bold ${Math.round(Math.min(17 * S, rsH * 0.34))}px "Courier New"`
   ctx.fillStyle = '#ffd878'
   ctx.fillText('💰', rsX + rsIconOff, 6 + rsH * 0.72)
   ctx.fillStyle = '#ffd060'
   ctx.fillText(fmt(persist.gold || 0), rsX + rsTextOff, 6 + rsH * 0.72)
 
-  // ─── Timer box (top-center) ───
-  const tmW = Math.round(130 * S), tmH = Math.round(52 * S)
+  // ─── Settings button (top-right) — 타이머보다 먼저 계산해서 공간 확보 ───
+  const pauseS = Math.min(Math.round(40 * S), Math.round(w * 0.07))
+  const pauseX = w - pauseS - Math.round(8 * S)
+
+  // ─── Timer box (top-center) — 리소스박스 우측과 설정버튼 좌측 사이에 맞춤 ───
+  const tmAvail = pauseX - (rsX + rsW) - Math.round(12 * S)  // 가용 너비
+  const tmW = Math.min(Math.round(130 * S), Math.max(80, tmAvail))
+  const tmH = Math.min(Math.round(52 * S), Math.round(w * 0.07))
   const tmX = w / 2 - tmW / 2
   _woodBox(tmX, 6, tmW, tmH, 6)
   const secsLeft = Math.ceil(runTimer)
   const isUrgent = runTimer <= 5 && gamePhase === 'running'
   const flashOn  = isUrgent && (Math.floor(Date.now() / 200) % 2 === 0)
-  ctx.font = `bold ${Math.round(30 * S)}px "Courier New"`
+  ctx.font = `bold ${Math.round(Math.min(30 * S, tmH * 0.58))}px "Courier New"`
   ctx.fillStyle = flashOn ? '#ff4040' : isUrgent ? '#ff8060' : '#fff'
   ctx.textAlign = 'center'; ctx.textBaseline = 'middle'
   ctx.shadowColor = isUrgent ? 'rgba(255,80,0,0.6)' : 'rgba(0,0,0,0.5)'
@@ -1786,22 +1853,18 @@ function drawCanvasHUD() {
   ctx.shadowBlur = 0
 
   // Round badge
-  ctx.font = `bold ${Math.round(9 * S)}px "Segoe UI"`
+  ctx.font = `bold ${Math.round(Math.min(9 * S, 13))}px "Segoe UI"`
   ctx.fillStyle = 'rgba(180,160,255,0.80)'
   ctx.textAlign = 'center'; ctx.textBaseline = 'top'
-  ctx.fillText(`R${roundNum}`, w / 2 + tmW / 2 - Math.round(18 * S), 10)
-
-  // ─── Settings button (top-right) ───
-  const pauseS = Math.round(40 * S)
-  const pauseX = w - pauseS - Math.round(8 * S)
+  ctx.fillText(`R${roundNum}`, w / 2 + tmW / 2 - Math.round(16 * S), 10)
   _woodBox(pauseX, 8, pauseS, pauseS, 5)
   ctx.fillStyle = '#c0c8e0'
-  ctx.font = `${Math.round(16 * S)}px Segoe UI`
+  ctx.font = `${Math.round(Math.min(16 * S, pauseS * 0.45))}px Segoe UI`
   ctx.textAlign = 'center'; ctx.textBaseline = 'middle'
-  ctx.fillText('⚙️', pauseX + pauseS / 2, 8 + pauseS / 2 - Math.round(3 * S))
-  ctx.font = `bold ${Math.round(8 * S)}px "Segoe UI"`
+  ctx.fillText('⚙️', pauseX + pauseS / 2, 8 + pauseS * 0.38)
+  ctx.font = `bold ${Math.round(Math.min(8 * S, pauseS * 0.22))}px "Segoe UI"`
   ctx.fillStyle = '#8090b0'
-  ctx.fillText(window.gameLanguage === 'en' ? 'MENU' : '설정', pauseX + pauseS / 2, 8 + pauseS / 2 + Math.round(11 * S))
+  ctx.fillText(window.gameLanguage === 'en' ? 'MENU' : '설정', pauseX + pauseS / 2, 8 + pauseS * 0.75)
 
   // ─── Bottom-left: chop range indicator ───
   const distToTree = Math.abs(char.x - tree.cx)

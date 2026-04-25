@@ -18,7 +18,7 @@ export const SKILL_NODES = [
   { id:'log_burst',   icon:'🌪️',name:'통나무 폭발',   maxLv:5, baseCost:100, costScale:2.2, currency:'logs', desc: lv=>`벌목 시 통나무 +${lv*2}개 (치명타 무관)` },
   { id:'log_chain',   icon:'🔗',name:'연쇄 분열',     maxLv:4, baseCost:200, costScale:2.8, currency:'gold', desc: lv=>`통나무 1개당 ${lv*20}% 확률로 1개 추가 연쇄` },
   // ── 로봇 강화 ──
-  { id:'robot_init',  icon:'🤖',name:'로봇 선배치',   maxLv:2, baseCost:400, costScale:3.5, currency:'gold', desc: lv=>`런 시작 시 로봇 ${lv}대 자동 배치` },
+  { id:'robot_init',  icon:'🤖',name:'로봇 선배치',   maxLv:5, baseCost:400, costScale:3.0, currency:'gold', desc: lv=>`런 시작 시 로봇 ${lv}대 자동 배치` },
   { id:'robot_speed', icon:'⚡',name:'로봇 가속',      maxLv:3, baseCost:200, costScale:2.5, currency:'logs', desc: lv=>`로봇 이동속도 +${lv*35}%` },
   { id:'robot_range', icon:'🔍',name:'로봇 탐지기',   maxLv:3, baseCost:180, costScale:2.2, currency:'gold', desc: lv=>`로봇 수집 범위 +${lv*25}%` },
 ]

@@ -1,0 +1,321 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, viewport-fit=cover"/>
+  <title>Tree Rush</title>
+  <style>
+    *{margin:0;padding:0;box-sizing:border-box;}
+    body{background:#000;overflow:hidden;font-family:'Segoe UI',sans-serif;width:100vw;height:100vh;display:flex;flex-direction:column;
+      padding-top:env(safe-area-inset-top);
+      padding-left:env(safe-area-inset-left);
+      padding-right:env(safe-area-inset-right);}
+
+    /* ── Game Canvas — fixed 16:9 letterboxed ── */
+    #game-wrap{flex:1;position:relative;overflow:hidden;min-height:0;background:#000;display:flex;align-items:center;justify-content:center;}
+    #game-canvas{display:block;image-rendering:pixelated;}
+
+
+    /* ── OVERLAY BASE ── */
+    .overlay{position:fixed;inset:0;background:rgba(0,0,0,0.85);z-index:100;display:none;align-items:center;justify-content:center;
+      padding:env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);}
+    .overlay.open{display:flex;}
+    .panel{background:#141824;border:1px solid #2a3050;border-radius:16px;width:min(520px,95vw);max-height:90vh;overflow-y:auto;padding:24px;}
+    .panel h2{color:#e2e8f0;font-size:20px;margin-bottom:4px;}
+    .panel .sub{color:#6b7280;font-size:12px;margin-bottom:20px;}
+    .close-btn{position:absolute;top:16px;right:16px;background:#1e2235;border:1px solid #2a3050;border-radius:8px;padding:6px 12px;color:#a8b3d6;cursor:pointer;font-size:12px;}
+    .close-btn:hover{color:#fff;}
+
+    /* ── CARD SELECTION ── */
+    #card-overlay{position:fixed;inset:0;background:rgba(0,0,0,0.9);z-index:200;display:none;flex-direction:column;align-items:center;justify-content:center;gap:24px;}
+    #card-overlay.open{display:flex;}
+    #card-overlay h2{color:#fff;font-size:24px;text-align:center;}
+    #card-overlay .sub{color:#a78bfa;font-size:14px;margin-top:-16px;}
+    .card-row{display:flex;gap:16px;flex-wrap:wrap;justify-content:center;}
+    .card{background:#1a1f2e;border:2px solid #3a4060;border-radius:12px;padding:20px;width:150px;cursor:pointer;transition:all 0.2s;text-align:center;}
+    .card:hover{transform:translateY(-8px);box-shadow:0 8px 32px rgba(124,58,237,0.4);}
+    .card.common{border-color:#6b7280;}.card.common:hover{border-color:#9ca3af;box-shadow:0 8px 32px rgba(156,163,175,0.3);}
+    .card.uncommon{border-color:#3b82f6;}.card.uncommon:hover{border-color:#60a5fa;box-shadow:0 8px 32px rgba(59,130,246,0.4);}
+    .card.rare{border-color:#f59e0b;}.card.rare:hover{border-color:#fbbf24;box-shadow:0 8px 32px rgba(245,158,11,0.5);}
+    .card.legendary{border-color:#ef4444;background:linear-gradient(135deg,#1a0505,#1a0a00);}.card.legendary:hover{box-shadow:0 8px 40px rgba(239,68,68,0.6);}
+    .card .c-icon{font-size:36px;margin-bottom:8px;}
+    .card .c-name{font-size:13px;font-weight:bold;color:#e2e8f0;margin-bottom:6px;}
+    .card .c-tier{font-size:10px;text-transform:uppercase;letter-spacing:1px;margin-bottom:8px;}
+    .card.common .c-tier{color:#9ca3af;}.card.uncommon .c-tier{color:#60a5fa;}
+    .card.rare .c-tier{color:#fbbf24;}.card.legendary .c-tier{color:#f87171;}
+    .card .c-desc{font-size:11px;color:#a8b3d6;line-height:1.5;}
+
+    /* ── SKILL TREE ── */
+    .skill-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-top:12px;}
+    .skill-node{background:#0d1117;border:2px solid #2a3050;border-radius:10px;padding:12px 8px;text-align:center;cursor:pointer;transition:all 0.15s;}
+    .skill-node:hover:not(.locked){background:#1e2235;border-color:#7c3aed;}
+    .skill-node.unlocked{background:#1a2035;border-color:#4ade80;}
+    .skill-node.locked{opacity:0.4;cursor:not-allowed;}
+    .skill-node .s-icon{font-size:24px;margin-bottom:4px;}
+    .skill-node .s-name{font-size:11px;font-weight:bold;color:#e2e8f0;margin-bottom:2px;}
+    .skill-node .s-lv{font-size:10px;color:#6b7280;}
+    .skill-node .s-desc{font-size:10px;color:#a8b3d6;margin-top:4px;}
+    .skill-node .s-cost{font-size:10px;color:#fbbf24;margin-top:4px;}
+    .skill-currency{display:flex;gap:16px;justify-content:center;margin-bottom:16px;}
+    .skill-currency .res{display:flex;align-items:center;gap:5px;background:#0d1117;border:1px solid #2a3050;border-radius:20px;padding:4px 12px;font-size:14px;font-weight:bold;color:#fff;}
+    .skill-currency .res .icon{font-size:16px;}
+    .skill-currency .res .val{color:#ffd700;}
+
+    /* ── ACHIEVEMENTS ── */
+    .ach-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:4px;}
+    .ach{background:#0d1117;border:1px solid #2a3050;border-radius:8px;padding:10px;display:flex;gap:8px;align-items:flex-start;}
+    .ach.done{background:#0d1a0d;border-color:#2d5a2d;}
+    .ach .a-icon{font-size:22px;flex-shrink:0;}
+    .ach .a-body .a-name{font-size:12px;font-weight:bold;color:#e2e8f0;}
+    .ach .a-body .a-desc{font-size:10px;color:#6b7280;margin-top:2px;}
+    .ach.done .a-body .a-name{color:#4ade80;}
+    .ach-progress{font-size:10px;color:#a78bfa;margin-top:3px;}
+
+    /* ── ROUND END ── */
+    #round-end-overlay{position:fixed;inset:0;background:rgba(0,0,0,0.88);z-index:220;display:none;flex-direction:column;align-items:center;justify-content:center;gap:16px;}
+    #round-end-overlay.open{display:flex;}
+    .re-box{background:#141824;border:1px solid #2a3050;border-radius:16px;padding:28px 36px;text-align:center;min-width:300px;}
+    .re-round-badge{display:inline-block;background:#7c3aed;border-radius:20px;padding:3px 14px;font-size:12px;font-weight:bold;color:#fff;margin-bottom:10px;letter-spacing:1px;}
+    .re-box h2{color:#86efac;font-size:26px;margin-bottom:4px;}
+    .re-box-btns{display:flex;gap:12px;justify-content:center;margin-top:18px;flex-wrap:wrap;}
+
+    /* ── UPGRADE PANEL (tabbed) ── */
+    #upgrade-overlay{position:fixed;inset:0;background:rgba(0,0,0,0.92);z-index:250;display:none;align-items:center;justify-content:center;}
+    #upgrade-overlay.open{display:flex;}
+    .upgrade-panel{width:min(560px,97vw);max-height:92vh;}
+    .upgrade-tabs{display:flex;gap:6px;margin-bottom:14px;}
+    .utab{flex:1;background:#0d1117;border:2px solid #2a3050;border-radius:8px;padding:9px 4px;color:#6b7280;font-size:13px;font-weight:bold;cursor:pointer;transition:all 0.15s;}
+    .utab:hover{border-color:#7c3aed;color:#a8b3d6;}
+    .utab.active{background:#1a1f35;border-color:#7c3aed;color:#e2e8f0;}
+    .utab-pane{display:none;}
+    .utab-pane.active{display:block;}
+
+    /* ── TEAM TAB ── */
+    .team-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:10px;}
+    .team-slot{background:#0d1117;border:2px solid #2a3050;border-radius:10px;padding:14px 10px;text-align:center;transition:border-color 0.2s;}
+    .team-slot.active{background:#0a1a0a;border-color:#2d5a2d;}
+    .team-slot.next-slot{border-color:#f59e0b;background:#1a1400;}
+    .team-slot.locked-slot{opacity:0.4;}
+    .team-slot .ts-icon{font-size:28px;margin-bottom:6px;}
+    .team-slot .ts-name{font-size:12px;font-weight:bold;color:#e2e8f0;margin-bottom:4px;}
+    .team-slot .ts-status{font-size:10px;color:#6b7280;}
+    .team-slot.active .ts-status{color:#4ade80;}
+    .team-slot.next-slot .ts-status{color:#fbbf24;}
+    .hire-btn{margin-top:8px;background:#7c3aed;border:none;border-radius:6px;padding:6px 14px;color:#fff;font-size:11px;cursor:pointer;font-weight:bold;transition:background 0.15s;display:block;width:100%;}
+    .hire-btn:hover{background:#6d28d9;}
+    .hire-btn:disabled{background:#2a3050;color:#4b5563;cursor:not-allowed;}
+
+    /* ── RUN END (full run complete) ── */
+    #runend-overlay{position:fixed;inset:0;background:rgba(0,0,0,0.92);z-index:300;display:none;flex-direction:column;align-items:center;justify-content:center;gap:16px;}
+    #runend-overlay.open{display:flex;}
+    .runend-box{background:#141824;border:1px solid #2a3050;border-radius:16px;padding:32px;text-align:center;min-width:320px;}
+    .runend-box h2{color:#ffd700;font-size:28px;margin-bottom:4px;}
+    .runend-stats{margin:16px 0;display:flex;flex-direction:column;gap:8px;}
+    .runend-stat{display:flex;justify-content:space-between;font-size:14px;color:#a8b3d6;}
+    .runend-stat span{color:#fff;font-weight:bold;}
+    .runend-btn{background:#7c3aed;border:none;border-radius:10px;padding:12px 32px;color:#fff;font-size:15px;font-weight:bold;cursor:pointer;margin-top:8px;transition:all 0.15s;}
+    .runend-btn:hover{background:#6d28d9;transform:scale(1.04);}
+    .runend-btn.secondary{background:#1e2235;border:1px solid #2a3050;color:#a8b3d6;font-size:13px;}
+
+    /* ── Move buttons ── */
+    #move-btns{position:absolute;bottom:0;left:0;right:0;display:flex;justify-content:space-between;
+      padding:8px;
+      padding-bottom:max(8px, env(safe-area-inset-bottom));
+      padding-left:max(8px,  env(safe-area-inset-left));
+      padding-right:max(8px, env(safe-area-inset-right));
+      pointer-events:none;z-index:5;}
+    .move-btn{background:rgba(30,34,53,0.85);border:1px solid #3a4060;border-radius:10px;
+      width:clamp(52px, 14vw, 88px);height:clamp(52px, 14vw, 88px);
+      font-size:clamp(20px, 5.5vw, 36px);
+      color:#a8b3d6;cursor:pointer;display:flex;align-items:center;justify-content:center;
+      pointer-events:all;user-select:none;-webkit-user-select:none;transition:background 0.1s;}
+    .move-btn:active,.move-btn.pressed{background:rgba(124,58,237,0.5);border-color:#7c3aed;color:#fff;}
+
+    /* Scrollbar */
+    ::-webkit-scrollbar{width:4px;}
+    ::-webkit-scrollbar-track{background:#0d1117;}
+    ::-webkit-scrollbar-thumb{background:#2a3050;border-radius:2px;}
+
+    /* ── Settings Overlay ── */
+    #settings-overlay{position:fixed;inset:0;background:rgba(0,0,0,0.88);z-index:400;display:none;align-items:center;justify-content:center;}
+    #settings-overlay.open{display:flex;}
+    .settings-panel{background:#141824;border:1px solid #2a3050;border-radius:18px;width:min(480px,95vw);max-height:92vh;overflow-y:auto;padding:28px 24px;display:flex;flex-direction:column;gap:22px;}
+    .settings-panel h2{color:#e2e8f0;font-size:20px;margin:0;display:flex;align-items:center;gap:8px;}
+    .settings-section{display:flex;flex-direction:column;gap:10px;}
+    .settings-section h3{color:#a78bfa;font-size:12px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;margin:0;}
+    .settings-row{display:flex;align-items:center;justify-content:space-between;gap:12px;}
+    .settings-label{color:#cbd5e1;font-size:14px;}
+
+    /* Language toggle */
+    .lang-toggle{display:flex;background:#0d1117;border-radius:8px;overflow:hidden;border:1px solid #2a3050;}
+    .lang-btn{padding:6px 18px;font-size:13px;font-weight:600;border:none;cursor:pointer;background:transparent;color:#6b7280;transition:all 0.15s;}
+    .lang-btn.active{background:#7c3aed;color:#fff;}
+
+    /* Volume slider */
+    .vol-wrap{display:flex;align-items:center;gap:10px;flex:1;}
+    .vol-wrap input[type=range]{flex:1;accent-color:#7c3aed;height:4px;}
+    .vol-val{color:#a8b3d6;font-size:12px;width:32px;text-align:right;}
+
+    /* BGM playlist */
+    .bgm-none{color:#4b5563;font-size:13px;text-align:center;padding:12px 0;}
+    .bgm-track{display:flex;align-items:center;gap:10px;background:#1e2235;border-radius:10px;padding:10px 12px;border:1px solid #2a3050;transition:border-color 0.15s;}
+    .bgm-track.active-track{border-color:#7c3aed;}
+    .bgm-track-name{flex:1;color:#e2e8f0;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+    .bgm-track-name.disabled{color:#4b5563;text-decoration:line-through;}
+    .bgm-move{background:none;border:none;color:#4b5563;cursor:pointer;font-size:14px;padding:2px 4px;line-height:1;}
+    .bgm-move:hover{color:#a78bfa;}
+    .bgm-toggle{appearance:none;width:36px;height:20px;background:#2a3050;border-radius:10px;cursor:pointer;position:relative;transition:background 0.2s;flex-shrink:0;}
+    .bgm-toggle:checked{background:#7c3aed;}
+    .bgm-toggle::after{content:'';position:absolute;width:14px;height:14px;background:#fff;border-radius:50%;top:3px;left:3px;transition:left 0.2s;}
+    .bgm-toggle:checked::after{left:19px;}
+
+    /* Danger zone */
+    .danger-btn{background:#7f1d1d;border:1px solid #991b1b;border-radius:10px;color:#fca5a5;font-size:14px;font-weight:600;padding:10px 24px;cursor:pointer;width:100%;transition:all 0.15s;}
+    .danger-btn:hover{background:#991b1b;}
+  </style>
+</head>
+<body>
+
+<!-- Game Canvas — fills all space -->
+<div id="game-wrap">
+  <canvas id="game-canvas"></canvas>
+  <div id="move-btns">
+    <button class="move-btn" id="btn-left" onpointerdown="startMove(-1)" onpointerup="stopMove()" onpointerleave="stopMove()">◀</button>
+    <button class="move-btn" id="btn-right" onpointerdown="startMove(1)" onpointerup="stopMove()" onpointerleave="stopMove()">▶</button>
+  </div>
+</div>
+
+
+<!-- Card Selection Overlay -->
+<div id="card-overlay">
+  <h2>⬆️ LEVEL UP!</h2>
+  <div class="sub" id="card-level-sub">레벨 2 달성 — 카드를 선택하세요</div>
+  <div class="card-row" id="card-row"></div>
+</div>
+
+<!-- Round End Overlay (벌목 결과) -->
+<div id="round-end-overlay">
+  <div class="re-box">
+    <div class="re-round-badge">라운드 <span id="re-round-num">1</span></div>
+    <h2>🪵 벌목 결과</h2>
+    <div class="runend-stats" id="re-stats"></div>
+    <div class="re-box-btns">
+      <button class="runend-btn secondary" onclick="openUpgradePanel()">⬆️ 업그레이드</button>
+      <button class="runend-btn" onclick="startNextRound()">▶ 다음 라운드</button>
+    </div>
+  </div>
+</div>
+
+<!-- Upgrade Overlay (tabbed: 스킬 / 팀 / 업적) -->
+<div id="upgrade-overlay">
+  <div class="panel upgrade-panel" style="position:relative">
+    <button class="close-btn" onclick="closeUpgradePanel()">✕ 닫기</button>
+    <h2>⬆️ 업그레이드</h2>
+    <p class="sub">라운드 사이 영구 강화를 선택하세요</p>
+    <div class="upgrade-tabs">
+      <button class="utab active" id="utab-btn-skill" onclick="switchUpgradeTab('skill',this)">🌳 스킬</button>
+      <button class="utab" id="utab-btn-team" onclick="switchUpgradeTab('team',this)">👷 팀</button>
+      <button class="utab" id="utab-btn-ach" onclick="switchUpgradeTab('ach',this)">🏆 업적</button>
+    </div>
+    <!-- Skill Tab -->
+    <div class="utab-pane active" id="utab-skill">
+      <div class="skill-currency">
+        <div class="res"><span class="icon">🪵</span><span class="val" id="st-logs">0</span></div>
+        <div class="res"><span class="icon">💰</span><span class="val" id="st-gold">0</span></div>
+      </div>
+      <div class="skill-grid" id="skill-grid"></div>
+    </div>
+    <!-- Team Tab -->
+    <div class="utab-pane" id="utab-team">
+      <div class="skill-currency">
+        <div class="res"><span class="icon">🪵</span><span class="val" id="team-logs-display">0</span></div>
+      </div>
+      <p style="text-align:center;color:#6b7280;font-size:11px;margin:-8px 0 4px">자동 벌목꾼을 고용해 나무를 자동 벌채합니다 (런 지속)</p>
+      <div class="team-grid" id="team-grid"></div>
+    </div>
+    <!-- Achievement Tab -->
+    <div class="utab-pane" id="utab-ach">
+      <p class="sub" id="ach-progress-label" style="margin-bottom:4px">0 / 20 달성</p>
+      <div class="ach-grid" id="ach-grid"></div>
+    </div>
+    <div style="text-align:center;margin-top:18px">
+      <button class="runend-btn" id="upgrade-next-btn" onclick="startNextRound()">▶ 다음 라운드 시작</button>
+    </div>
+  </div>
+</div>
+
+<!-- Run End Overlay (전체 런 완료) -->
+<div id="runend-overlay">
+  <div class="runend-box">
+    <h2 id="runend-title">🎉 신목 벌채 완료!</h2>
+    <p style="color:#a8b3d6;font-size:13px;margin-top:4px" id="runend-sub">런 종료</p>
+    <div class="runend-stats" id="runend-stats"></div>
+    <button class="runend-btn" onclick="startNewRun()">🪓 새 런 시작</button>
+    <br><br>
+    <button class="runend-btn secondary" onclick="openUpgradePanel()">⬆️ 업그레이드 보기</button>
+  </div>
+</div>
+
+<!-- ── Settings Overlay ── -->
+<div id="settings-overlay">
+  <div class="settings-panel">
+    <h2>⚙️ <span data-i18n="settings">설정</span></h2>
+
+    <!-- Language -->
+    <div class="settings-section">
+      <h3 data-i18n="language">언어 / Language</h3>
+      <div class="settings-row">
+        <span class="settings-label" data-i18n="selectLang">언어 선택</span>
+        <div class="lang-toggle">
+          <button class="lang-btn active" id="lang-ko" onclick="setLanguage('ko')">한국어</button>
+          <button class="lang-btn" id="lang-en" onclick="setLanguage('en')">English</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- BGM Volume -->
+    <div class="settings-section">
+      <h3>BGM</h3>
+      <div class="settings-row">
+        <span class="settings-label" data-i18n="volume">볼륨</span>
+        <div class="vol-wrap">
+          <span style="font-size:16px">🔈</span>
+          <input type="range" id="bgm-volume" min="0" max="100" value="50"
+            oninput="onBgmVolume(this.value)">
+          <span class="vol-val" id="bgm-vol-label">50%</span>
+        </div>
+      </div>
+      <!-- Now Playing -->
+      <div class="settings-row" style="margin-top:-4px">
+        <span class="settings-label" style="font-size:12px;color:#6b7280" data-i18n="nowPlaying">현재 재생</span>
+        <span id="bgm-now-playing" style="color:#a78bfa;font-size:12px;text-align:right;max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">—</span>
+      </div>
+      <!-- Prev / Next -->
+      <div class="settings-row" style="justify-content:center;gap:16px">
+        <button class="bgm-move" style="font-size:20px" onclick="window._bgm.prev()">⏮</button>
+        <button class="bgm-move" style="font-size:20px" onclick="window._bgm.next(); refreshBgmUI()">⏭</button>
+      </div>
+    </div>
+
+    <!-- Playlist -->
+    <div class="settings-section">
+      <h3 data-i18n="playlist">플레이리스트</h3>
+      <div id="bgm-playlist-list">
+        <p class="bgm-none" data-i18n="noTracks">src/assets/bgm/ 폴더에 mp3 파일을 넣어주세요</p>
+      </div>
+    </div>
+
+    <!-- Give Up (danger zone) -->
+    <div class="settings-section" id="settings-giveup-section" style="display:none">
+      <h3 data-i18n="danger">위험</h3>
+      <button class="danger-btn" onclick="settingsGiveUp()" data-i18n-btn="giveUp">🏳️ 런 포기</button>
+    </div>
+
+    <!-- Close -->
+    <button class="runend-btn" onclick="closeSettings()" data-i18n-btn="close">✕ 닫기</button>
+  </div>
+</div>
+
+<script type="module" src="/src/main.js"></script>
+</body>
+</html>

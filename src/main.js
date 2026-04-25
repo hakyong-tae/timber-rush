@@ -2011,11 +2011,15 @@ function _loopFrame(ts) {
 
     // Falling logs
     for (let i = fallingLogs.length - 1; i >= 0; i--) {
+      const log = fallingLogs[i]
+      if (!log) continue
       if (isGameActive) {
-        fallingLogs[i].update(delta)
-        if (fallingLogs[i].isDead) { fallingLogs.splice(i, 1); continue }
+        log.update(delta)
+        // log may have been removed from fallingLogs by a robot/worker during update
+        if (fallingLogs[i] !== log) continue
+        if (log.isDead) { fallingLogs.splice(i, 1); continue }
       }
-      fallingLogs[i].draw(ctx)
+      log.draw(ctx)
     }
 
     drawCharacter()

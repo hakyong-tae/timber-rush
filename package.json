@@ -8,6 +8,11 @@
     "preview": "vite preview"
   },
   "devDependencies": {
+    "@ffmpeg/core": "^0.12.10",
+    "@ffmpeg/ffmpeg": "^0.12.15",
+    "audiobuffer-to-wav": "^1.0.0",
+    "lamejs": "^1.2.1",
+    "sharp": "^0.34.5",
     "vite": "^5.4.21"
   },
   "dependencies": {

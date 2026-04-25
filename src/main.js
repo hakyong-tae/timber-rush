@@ -724,6 +724,111 @@ document.addEventListener('keydown', e => {
 })
 document.addEventListener('keyup', e => { keys[e.key] = false })
 
+// ── Virtual Joystick ──
+;(function initJoystick() {
+  const zone  = document.getElementById('joystick-zone')
+  const base  = document.getElementById('joystick-base')
+  const knob  = document.getElementById('joystick-knob')
+
+  if (!zone || !base || !knob) return
+
+  const DEAD_ZONE   = 10   // px — 이 이내는 입력 무시
+  const MAX_RADIUS  = () => base.offsetWidth * 0.40  // 노브 최대 이동 반경
+
+  let activeTouchId = null
+  let originX = 0, originY = 0
+
+  function getBaseR() { return base.offsetWidth / 2 }
+
+  function onStart(e) {
+    // 오버레이가 열려 있으면 조이스틱 무시
+    if (document.querySelector('.overlay.open, #card-overlay.open, #round-end-overlay.open, #upgrade-overlay.open, #runend-overlay.open, #settings-overlay.open')) return
+
+    const touch = e.changedTouches ? e.changedTouches[0] : e
+    if (activeTouchId !== null) return
+    activeTouchId = touch.identifier ?? -1
+
+    // 터치 위치를 zone 내 좌표로 변환
+    const zr = zone.getBoundingClientRect()
+    const cx = touch.clientX - zr.left
+    const cy = touch.clientY - zr.top
+    const bR = getBaseR()
+
+    // base를 터치 위치로 즉시 이동
+    base.style.left = (cx - bR) + 'px'
+    base.style.top  = (cy - bR) + 'px'
+    base.style.bottom = 'auto'
+    base.classList.add('active')
+
+    originX = cx
+    originY = cy
+    knob.style.transform = 'translate(0,0)'
+    char.moveDir = 0
+
+    e.preventDefault()
+  }
+
+  function onMove(e) {
+    if (activeTouchId === null) return
+    const touches = e.changedTouches || []
+    let touch = null
+    for (let i = 0; i < touches.length; i++) {
+      if ((touches[i].identifier ?? -1) === activeTouchId) { touch = touches[i]; break }
+    }
+    if (!touch) touch = e   // mouse fallback
+
+    const zr = zone.getBoundingClientRect()
+    const cx = touch.clientX - zr.left
+    const cy = touch.clientY - zr.top
+
+    const dx = cx - originX
+    const dy = cy - originY
+    const dist = Math.sqrt(dx * dx + dy * dy)
+    const maxR = MAX_RADIUS()
+
+    const clampDist = Math.min(dist, maxR)
+    const angle     = Math.atan2(dy, dx)
+    const nx        = Math.cos(angle) * clampDist
+    const ny        = Math.sin(angle) * clampDist
+
+    knob.style.transform = `translate(${nx}px, ${ny}px)`
+
+    // 수평 방향 결정 (데드존 포함)
+    if (Math.abs(dx) < DEAD_ZONE) {
+      char.moveDir = 0
+    } else {
+      char.moveDir = dx > 0 ? 1 : -1
+    }
+
+    e.preventDefault()
+  }
+
+  function onEnd(e) {
+    const touches = e.changedTouches || []
+    let matched = false
+    for (let i = 0; i < touches.length; i++) {
+      if ((touches[i].identifier ?? -1) === activeTouchId) { matched = true; break }
+    }
+    if (!matched && e.changedTouches) return   // 다른 터치 종료
+
+    activeTouchId = null
+    char.moveDir  = 0
+    base.classList.remove('active')
+    knob.style.transform = 'translate(0,0)'
+  }
+
+  // Touch events (passive:false — preventDefault 필요)
+  zone.addEventListener('touchstart',  onStart, { passive: false })
+  zone.addEventListener('touchmove',   onMove,  { passive: false })
+  zone.addEventListener('touchend',    onEnd,   { passive: false })
+  zone.addEventListener('touchcancel', onEnd,   { passive: false })
+
+  // Mouse fallback (데스크탑 테스트용)
+  zone.addEventListener('mousedown', onStart)
+  window.addEventListener('mousemove', e => { if (activeTouchId !== null) onMove(e) })
+  window.addEventListener('mouseup',   e => { if (activeTouchId !== null) onEnd(e)  })
+})()
+
 window.startMove = (dir) => { char.moveDir = dir }
 window.stopMove  = ()    => { char.moveDir = 0 }
 

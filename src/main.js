@@ -9,6 +9,7 @@ import robotSrc      from './assets/robot.webp'
 
 // ── Background images — auto-import all bg_*.webp in assets ──
 // Adding a new bg_xxx.webp file will be picked up automatically (no code change needed).
+const _bgImages = {}
 const _bgSrcs = import.meta.glob('./assets/bg_*.webp', { eager: true, import: 'default' })
 
 Object.entries(_bgSrcs).forEach(([path, src]) => {

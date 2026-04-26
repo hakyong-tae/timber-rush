@@ -1,14 +1,13 @@
 // ── BGM Player ──
 // src/assets/bgm/ 폴더에 mp3 파일을 넣으면 자동으로 플레이리스트에 추가됩니다.
 
-const _srcs = import.meta.glob('./assets/bgm/*.mp3', { eager: true, import: 'default' })
+const _srcs = import.meta.glob('./assets/bgm/*.ogg', { eager: true, import: 'default' })
 
-// 플레이리스트 상태 (localStorage로 영속)
 export const playlist = []
 
-// 파일명에서 트랙 이름 추출
+// Order doesn't strictly matter, but typically we want to play them randomly or sequentially
 Object.entries(_srcs).forEach(([path, src]) => {
-  const raw  = path.match(/([^/]+)\.mp3$/)?.[1] || path
+  const raw  = path.match(/([^/]+)\.ogg$/)?.[1] || path
   // snake_case / kebab-case → 보기 좋게 변환
   const name = raw.replace(/[-_]/g, ' ').replace(/\b\w/g, c => c.toUpperCase())
   playlist.push({ id: raw, name, src, enabled: true, audio: null })

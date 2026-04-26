@@ -1,12 +1,12 @@
 import { run } from './state.js'
 
 // ── 스프라이트 임포트 ──
-import srcBasic  from './assets/tree_basic.png'
-import srcGolden from './assets/tree_golden.png'
-import srcFrozen from './assets/tree_frozen.png'
-import srcVenom  from './assets/tree_venom.png'
-import srcFire   from './assets/tree_fire.png'
-import srcShadow from './assets/tree_shadow.png'
+import srcBasic  from './assets/tree_basic.webp'
+import srcGolden from './assets/tree_golden.webp'
+import srcFrozen from './assets/tree_frozen.webp'
+import srcVenom  from './assets/tree_venom.webp'
+import srcFire   from './assets/tree_fire.webp'
+import srcShadow from './assets/tree_shadow.webp'
 
 // ── 스프라이트 로더 (배경 제거) ──
 const _sprites = {}   // key → { canvas, nw, nh }

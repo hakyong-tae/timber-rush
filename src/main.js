@@ -4,17 +4,15 @@ import { Tree, pickTreeType } from './tree.js'
 import { drawCards, applyCard, CARD_POOL } from './cards.js'
 import { checkAchievements, renderAchievements } from './achievements.js'
 import { renderSkillTree, SKILL_NODES } from './skilltree.js'
-import lumberjackSrc from './assets/lumberjack.png'
-import robotSrc      from './assets/robot.png'
-import collectSoundSrc from './assets/collect.mp3'
-import chopSoundSrc    from './assets/chop.mp3'
+import lumberjackSrc from './assets/lumberjack.webp'
+import robotSrc      from './assets/robot.webp'
 
-// ── Background images — auto-import all bg_*.png in assets ──
-// Adding a new bg_xxx.png file will be picked up automatically (no code change needed).
-const _bgSrcs = import.meta.glob('./assets/bg_*.png', { eager: true, import: 'default' })
-const _bgImages = {}
+// ── Background images — auto-import all bg_*.webp in assets ──
+// Adding a new bg_xxx.webp file will be picked up automatically (no code change needed).
+const _bgSrcs = import.meta.glob('./assets/bg_*.webp', { eager: true, import: 'default' })
+
 Object.entries(_bgSrcs).forEach(([path, src]) => {
-  const m = path.match(/bg_(\w+)\.png$/)
+  const m = path.match(/bg_(\w+)\.webp$/)
   if (!m) return
   const key = m[1]   // e.g. 'basic', 'golden', 'frozen', …
   const img = new Image()

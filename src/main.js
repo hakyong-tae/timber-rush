@@ -6,6 +6,8 @@ import { checkAchievements, renderAchievements } from './achievements.js'
 import { renderSkillTree, SKILL_NODES } from './skilltree.js'
 import lumberjackSrc from './assets/lumberjack.webp'
 import robotSrc      from './assets/robot.webp'
+import collectSoundSrc from './assets/collect.mp3'
+import chopSoundSrc    from './assets/chop.mp3'
 
 // ── Background images — auto-import all bg_*.webp in assets ──
 // Adding a new bg_xxx.webp file will be picked up automatically (no code change needed).

@@ -1,12 +1,15 @@
 <!DOCTYPE html>
-<html lang="ko">
+<html lang="en">
 <head>
   <meta charset="UTF-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, viewport-fit=cover"/>
   <title>Tree Rush</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Gowun+Dodum&display=swap" rel="stylesheet">
   <style>
     *{margin:0;padding:0;box-sizing:border-box;}
-    body{background:#000;overflow:hidden;font-family:'Segoe UI',sans-serif;width:100vw;height:100vh;display:flex;flex-direction:column;
+    body{background:#000;overflow:hidden;font-family:'Gowun Dodum','Segoe UI',sans-serif;width:100vw;height:100vh;display:flex;flex-direction:column;
       padding-top:env(safe-area-inset-top);
       padding-left:env(safe-area-inset-left);
       padding-right:env(safe-area-inset-right);}
@@ -118,8 +121,10 @@
     .runend-btn.secondary{background:#1e2235;border:1px solid #2a3050;color:#a8b3d6;font-size:13px;}
 
     /* ── Virtual Joystick ── */
+    /* pointer-events:auto on zone is the fix — touchstart never fired with :none. */
     #joystick-zone{position:absolute;bottom:0;left:0;right:0;height:38%;
-      pointer-events:none;z-index:5;
+      pointer-events:auto;z-index:5;
+      touch-action:none;
       padding-bottom:env(safe-area-inset-bottom);
       padding-left:env(safe-area-inset-left);
       padding-right:env(safe-area-inset-right);}
@@ -131,7 +136,7 @@
       background:rgba(20,24,40,0.55);
       border:2px solid rgba(124,58,237,0.45);
       display:flex;align-items:center;justify-content:center;
-      pointer-events:all;
+      pointer-events:none;
       touch-action:none;
       user-select:none;-webkit-user-select:none;
       opacity:0;
@@ -146,6 +151,28 @@
       box-shadow:0 2px 12px rgba(124,58,237,0.6);
       transition:transform 0.05s;
       pointer-events:none;
+    }
+
+    /* ── Rotate-to-landscape Overlay ── */
+    /* Mobile-sized portrait → block UI until rotated. Desktop/landscape never sees this. */
+    #rotate-overlay{
+      display:none;
+      position:fixed;inset:0;z-index:9999;
+      background:radial-gradient(ellipse at center,#1a1024 0%,#000 100%);
+      color:#e8e0ff;
+      flex-direction:column;align-items:center;justify-content:center;
+      gap:24px;padding:30px;text-align:center;
+      font-family:'Segoe UI',sans-serif;
+    }
+    #rotate-overlay .icon{font-size:84px;animation:rot 1.6s ease-in-out infinite;}
+    @keyframes rot{
+      0%,100%{transform:rotate(-15deg);}
+      50%{transform:rotate(75deg);}
+    }
+    #rotate-overlay h2{font-size:22px;font-weight:700;color:#fff;margin:0;}
+    #rotate-overlay p{font-size:14px;color:#a8b3d6;margin:0;line-height:1.6;}
+    @media (orientation: portrait) and (max-width: 1000px) {
+      #rotate-overlay{display:flex;}
     }
 
     /* Scrollbar */
@@ -193,6 +220,13 @@
 </head>
 <body>
 
+<!-- Rotate-to-landscape Overlay (mobile portrait only) -->
+<div id="rotate-overlay">
+  <div class="icon">📱</div>
+  <h2 data-i18n="rotateTitle">Please rotate your device</h2>
+  <p><span data-i18n="rotateBody1">Please rotate your device to landscape</span><br><span data-i18n="rotateBody2">This game requires landscape orientation</span></p>
+</div>
+
 <!-- Game Canvas — fills all space -->
 <div id="game-wrap">
   <canvas id="game-canvas"></canvas>
@@ -206,34 +240,34 @@
 
 <!-- Card Selection Overlay -->
 <div id="card-overlay">
-  <h2>⬆️ LEVEL UP!</h2>
-  <div class="sub" id="card-level-sub">레벨 2 달성 — 카드를 선택하세요</div>
+  <h2 data-i18n="levelUp">⬆️ LEVEL UP!</h2>
+  <div class="sub" id="card-level-sub">Level 2 reached — pick a card</div>
   <div class="card-row" id="card-row"></div>
 </div>
 
-<!-- Round End Overlay (벌목 결과) -->
+<!-- Round End Overlay (Chop Result) -->
 <div id="round-end-overlay">
   <div class="re-box">
-    <div class="re-round-badge">라운드 <span id="re-round-num">1</span></div>
-    <h2>🪵 벌목 결과</h2>
+    <div class="re-round-badge"><span data-i18n="round">Round</span> <span id="re-round-num">1</span></div>
+    <h2 data-i18n="chopResult">🪵 Chop Result</h2>
     <div class="runend-stats" id="re-stats"></div>
     <div class="re-box-btns">
-      <button class="runend-btn secondary" onclick="openUpgradePanel()">⬆️ 업그레이드</button>
-      <button class="runend-btn" onclick="startNextRound()">▶ 다음 라운드</button>
+      <button class="runend-btn secondary" onclick="openUpgradePanel()" data-i18n-btn="upgrade">⬆️ Upgrade</button>
+      <button class="runend-btn" onclick="startNextRound()" data-i18n-btn="nextRound">▶ Next Round</button>
     </div>
   </div>
 </div>
 
-<!-- Upgrade Overlay (tabbed: 스킬 / 팀 / 업적) -->
+<!-- Upgrade Overlay (tabbed: Skills / Team / Achievements) -->
 <div id="upgrade-overlay">
   <div class="panel upgrade-panel" style="position:relative">
-    <button class="close-btn" onclick="closeUpgradePanel()">✕ 닫기</button>
-    <h2>⬆️ 업그레이드</h2>
-    <p class="sub">라운드 사이 영구 강화를 선택하세요</p>
+    <button class="close-btn" onclick="closeUpgradePanel()" data-i18n-btn="close">✕ Close</button>
+    <h2 data-i18n="upgradeTitle">⬆️ Upgrade</h2>
+    <p class="sub" data-i18n="upgradeSub">Choose permanent upgrades between rounds</p>
     <div class="upgrade-tabs">
-      <button class="utab active" id="utab-btn-skill" onclick="switchUpgradeTab('skill',this)">🌳 스킬</button>
-      <button class="utab" id="utab-btn-team" onclick="switchUpgradeTab('team',this)">👷 팀</button>
-      <button class="utab" id="utab-btn-ach" onclick="switchUpgradeTab('ach',this)">🏆 업적</button>
+      <button class="utab active" id="utab-btn-skill" onclick="switchUpgradeTab('skill',this)" data-i18n-btn="tabSkill">🌳 Skills</button>
+      <button class="utab" id="utab-btn-team" onclick="switchUpgradeTab('team',this)" data-i18n-btn="tabTeam">👷 Team</button>
+      <button class="utab" id="utab-btn-ach" onclick="switchUpgradeTab('ach',this)" data-i18n-btn="tabAch">🏆 Achievements</button>
     </div>
     <!-- Skill Tab -->
     <div class="utab-pane active" id="utab-skill">
@@ -248,45 +282,45 @@
       <div class="skill-currency">
         <div class="res"><span class="icon">🪵</span><span class="val" id="team-logs-display">0</span></div>
       </div>
-      <p style="text-align:center;color:#6b7280;font-size:11px;margin:-8px 0 4px">자동 벌목꾼을 고용해 나무를 자동 벌채합니다 (런 지속)</p>
+      <p style="text-align:center;color:#6b7280;font-size:11px;margin:-8px 0 4px" data-i18n="teamHint">Hire automatic lumberjacks to chop trees automatically (lasts the run)</p>
       <div class="team-grid" id="team-grid"></div>
     </div>
     <!-- Achievement Tab -->
     <div class="utab-pane" id="utab-ach">
-      <p class="sub" id="ach-progress-label" style="margin-bottom:4px">0 / 20 달성</p>
+      <p class="sub" id="ach-progress-label" style="margin-bottom:4px">0 / 20 unlocked</p>
       <div class="ach-grid" id="ach-grid"></div>
     </div>
     <div style="text-align:center;margin-top:18px">
-      <button class="runend-btn" id="upgrade-next-btn" onclick="startNextRound()">▶ 다음 라운드 시작</button>
+      <button class="runend-btn" id="upgrade-next-btn" onclick="startNextRound()" data-i18n-btn="nextRoundStart">▶ Start Next Round</button>
     </div>
   </div>
 </div>
 
-<!-- Run End Overlay (전체 런 완료) -->
+<!-- Run End Overlay (full run complete) -->
 <div id="runend-overlay">
   <div class="runend-box">
-    <h2 id="runend-title">🎉 신목 벌채 완료!</h2>
-    <p style="color:#a8b3d6;font-size:13px;margin-top:4px" id="runend-sub">런 종료</p>
+    <h2 id="runend-title">🎉 World Tree Felled!</h2>
+    <p style="color:#a8b3d6;font-size:13px;margin-top:4px" id="runend-sub">Run complete</p>
     <div class="runend-stats" id="runend-stats"></div>
-    <button class="runend-btn" onclick="startNewRun()">🪓 새 런 시작</button>
+    <button class="runend-btn" onclick="startNewRun()" data-i18n-btn="newRun">🪓 New Run</button>
     <br><br>
-    <button class="runend-btn secondary" onclick="openUpgradePanel()">⬆️ 업그레이드 보기</button>
+    <button class="runend-btn secondary" onclick="openUpgradePanel()" data-i18n-btn="viewUpgrade">⬆️ View Upgrades</button>
   </div>
 </div>
 
 <!-- ── Settings Overlay ── -->
 <div id="settings-overlay">
   <div class="settings-panel">
-    <h2>⚙️ <span data-i18n="settings">설정</span></h2>
+    <h2>⚙️ <span data-i18n="settings">Settings</span></h2>
 
     <!-- Language -->
     <div class="settings-section">
-      <h3 data-i18n="language">언어 / Language</h3>
+      <h3 data-i18n="language">Language</h3>
       <div class="settings-row">
-        <span class="settings-label" data-i18n="selectLang">언어 선택</span>
+        <span class="settings-label" data-i18n="selectLang">Select Language</span>
         <div class="lang-toggle">
-          <button class="lang-btn active" id="lang-ko" onclick="setLanguage('ko')">한국어</button>
-          <button class="lang-btn" id="lang-en" onclick="setLanguage('en')">English</button>
+          <button class="lang-btn" id="lang-ko" onclick="setLanguage('ko')">한국어</button>
+          <button class="lang-btn active" id="lang-en" onclick="setLanguage('en')">English</button>
         </div>
       </div>
     </div>
@@ -295,7 +329,7 @@
     <div class="settings-section">
       <h3>BGM</h3>
       <div class="settings-row">
-        <span class="settings-label" data-i18n="volume">볼륨</span>
+        <span class="settings-label" data-i18n="volume">Volume</span>
         <div class="vol-wrap">
           <span style="font-size:16px">🔈</span>
           <input type="range" id="bgm-volume" min="0" max="100" value="50"
@@ -308,7 +342,7 @@
     <div class="settings-section">
       <h3>SFX</h3>
       <div class="settings-row">
-        <span class="settings-label" data-i18n="sfxVolume">효과음 볼륨</span>
+        <span class="settings-label" data-i18n="sfxVolume">SFX Volume</span>
         <div class="vol-wrap">
           <span style="font-size:16px">🔊</span>
           <input type="range" id="sfx-volume" min="0" max="100" value="50"
@@ -319,7 +353,7 @@
     </div>
       <!-- Now Playing -->
       <div class="settings-row" style="margin-top:-4px">
-        <span class="settings-label" style="font-size:12px;color:#6b7280" data-i18n="nowPlaying">현재 재생</span>
+        <span class="settings-label" style="font-size:12px;color:#6b7280" data-i18n="nowPlaying">Now Playing</span>
         <span id="bgm-now-playing" style="color:#a78bfa;font-size:12px;text-align:right;max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">—</span>
       </div>
       <!-- Prev / Next -->
@@ -331,20 +365,20 @@
 
     <!-- Playlist -->
     <div class="settings-section">
-      <h3 data-i18n="playlist">플레이리스트</h3>
+      <h3 data-i18n="playlist">Playlist</h3>
       <div id="bgm-playlist-list">
-        <p class="bgm-none" data-i18n="noTracks">src/assets/bgm/ 폴더에 mp3 파일을 넣어주세요</p>
+        <p class="bgm-none" data-i18n="noTracks">Add mp3 files to src/assets/bgm/ folder</p>
       </div>
     </div>
 
     <!-- Give Up (danger zone) -->
     <div class="settings-section" id="settings-giveup-section" style="display:none">
-      <h3 data-i18n="danger">위험</h3>
-      <button class="danger-btn" onclick="settingsGiveUp()" data-i18n-btn="giveUp">🏳️ 런 포기</button>
+      <h3 data-i18n="danger">Danger Zone</h3>
+      <button class="danger-btn" onclick="settingsGiveUp()" data-i18n-btn="giveUp">🏳️ Give Up Run</button>
     </div>
 
     <!-- Close -->
-    <button class="runend-btn" onclick="closeSettings()" data-i18n-btn="close">✕ 닫기</button>
+    <button class="runend-btn" onclick="closeSettings()" data-i18n-btn="close">✕ Close</button>
   </div>
 </div>
 

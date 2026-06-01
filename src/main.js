@@ -1,9 +1,10 @@
 import { persist, run, resetRun, addXP } from './state.js'
 import * as BGM from './bgm.js'
 import { Tree, pickTreeType } from './tree.js'
-import { drawCards, applyCard, CARD_POOL } from './cards.js'
-import { checkAchievements, renderAchievements } from './achievements.js'
+import { drawCards, applyCard, CARD_POOL, cardName, cardDesc } from './cards.js'
+import { checkAchievements, renderAchievements, achName } from './achievements.js'
 import { renderSkillTree, SKILL_NODES } from './skilltree.js'
+import { t, setLanguage as i18nSetLanguage, getLanguage, subscribe as i18nSubscribe } from './i18n.js'
 import lumberjackSrc from './assets/lumberjack.webp'
 import robotSrc      from './assets/robot.webp'
 import collectSoundSrc from './assets/collect.mp3'
@@ -694,7 +695,7 @@ document.addEventListener('keydown', e => {
   if (e.key === 'g' || e.key === 'G') {
     if (gamePhase === 'running') {
       runTimer = 0
-      spawnFloat(canvas.width / 2, canvas.height * 0.3, '🛠 라운드 종료', '#ff6b6b', 18)
+      spawnFloat(canvas.width / 2, canvas.height * 0.3, t('dbgRoundEnd'), '#ff6b6b', 18)
     }
   }
 
@@ -702,7 +703,7 @@ document.addEventListener('keydown', e => {
     if (gamePhase === 'running') {
       const leveled = addXP(run.xpToNext - run.xp)
       if (leveled) {
-        spawnFloat(canvas.width / 2, canvas.height * 0.3, `🛠 레벨 ${run.level}`, '#a78bfa', 18)
+        spawnFloat(canvas.width / 2, canvas.height * 0.3, t('dbgLevel', run.level), '#a78bfa', 18)
         triggerLevelUp()
       }
     }
@@ -719,7 +720,7 @@ document.addEventListener('keydown', e => {
     // 로봇 반영
     _robots = []
     syncRobots()
-    spawnFloat(canvas.width / 2, canvas.height * 0.3, '🛠 ALL SKILLS MAX', '#ffd700', 22)
+    spawnFloat(canvas.width / 2, canvas.height * 0.3, t('dbgAllMax'), '#ffd700', 22)
     updateHUD()
   }
 })
@@ -973,7 +974,7 @@ function doChop() {
   spawnFallingLog(tx, ty, result.segType || 'normal', logCount)
 
   if (logCount > 1) {
-    spawnFloat(tx, ty - 44, `💥 치명타! ×${logCount}`, '#ff6b35', 16)
+    spawnFloat(tx, ty - 44, t('critHit', logCount), '#ff6b35', 16)
     screenShake = Math.max(screenShake, 3 + Math.min(logCount, 12))
   }
 
@@ -1052,11 +1053,11 @@ function collectLog(log) {
       persist.gold += bonus
       persist.totalGoldEarned += bonus
       spawnFloat(log.x, log.y - 38, `💎 +${bonus}💰`, '#FFD700', 17)
-      spawnFloat(log.x, log.y - 54, '황금 통나무!', '#FFD700', 13)
+      spawnFloat(log.x, log.y - 54, t('goldenLog'), '#FFD700', 13)
       break
     }
     case 'lightning': {
-      spawnFloat(log.x, log.y - 38, '⚡ 번개 발동!', '#FFE000', 15)
+      spawnFloat(log.x, log.y - 38, t('lightningProc'), '#FFE000', 15)
       tree.triggerLightning(() => {
         persist.logs += Math.ceil(run.logMult)
         persist.totalLogsEarned += Math.ceil(run.logMult)
@@ -1072,12 +1073,12 @@ function collectLog(log) {
             persist.totalLogsEarned += Math.ceil(run.logMult)
           })
         }
-        spawnFloat(log.x, log.y - 52, '⚡⚡⚡ 연쇄 번개!', '#FFE000', 13)
+        spawnFloat(log.x, log.y - 52, t('chainLightning'), '#FFE000', 13)
       }
       break
     }
     case 'freeze': {
-      spawnFloat(log.x, log.y - 38, '❄️ 5배 수집!', '#87CEEB', 15)
+      spawnFloat(log.x, log.y - 38, t('freeze5x'), '#87CEEB', 15)
       const origLM = run.logMult, origGM = run.goldMult
       run.logMult *= 5; run.goldMult *= 5
       setTimeout(() => { run.logMult = origLM; run.goldMult = origGM }, 3000)
@@ -1092,17 +1093,17 @@ function collectLog(log) {
         persist.totalLogsEarned += bl
       })
       fallingLogs = fallingLogs.filter(l => !l.landed)
-      spawnFloat(char.x, char.y - 30, `🧲 +${magCount}개 일괄 수집!`, '#FF69B4', 16)
+      spawnFloat(char.x, char.y - 30, t('magnetBulk', magCount), '#FF69B4', 16)
       break
     }
     case 'fire': {
       tree.triggerFire(run.damage * 1.5, 300)
-      spawnFloat(log.x, log.y - 38, '🔥 연소 시작!', '#FF4500', 15)
+      spawnFloat(log.x, log.y - 38, t('burnStart'), '#FF4500', 15)
       break
     }
     case 'explosive': {
       tree.triggerExplosive()
-      spawnFloat(log.x, log.y - 38, '💥 폭발!', '#FF8C00', 15)
+      spawnFloat(log.x, log.y - 38, t('explode'), '#FF8C00', 15)
       spawnExplosion(log.x, log.y)
       screenShake = Math.max(screenShake, 12)
       break
@@ -1121,14 +1122,18 @@ function showRunEnd() {
   const sub      = document.getElementById('runend-sub')
   const statsDiv = document.getElementById('runend-stats')
 
-  title.textContent = '🪓 벌목 종료!'
-  sub.textContent   = `런 ${run.runNum || 1} · 라운드 ${roundNum} · ${Math.floor(totalRunTime / 60)}분 ${Math.floor(totalRunTime % 60)}초`
+  title.textContent = t('runEndChop')
+  sub.textContent   = t('runEndStats',
+    run.runNum || 1,
+    roundNum,
+    Math.floor(totalRunTime / 60),
+    Math.floor(totalRunTime % 60))
 
   const rows = [
-    { label: '최고 레벨',    value: `Lv.${run.level}` },
-    { label: '획득한 통나무',value: fmt(persist.totalLogsEarned) },
-    { label: '획득한 골드',  value: fmt(persist.totalGoldEarned) },
-    { label: '총 도끼질',    value: `${persist.totalChops}회` },
+    { label: t('statBestLevel'),  value: `${t('levelPrefix')}${run.level}` },
+    { label: t('statLogsEarned'), value: fmt(persist.totalLogsEarned) },
+    { label: t('statGoldEarned'), value: fmt(persist.totalGoldEarned) },
+    { label: t('statTotalChops'), value: `${persist.totalChops}${t('chopCountUnit')}` },
   ]
   statsDiv.innerHTML = rows.map(r =>
     `<div class="runend-stat">${r.label}<span>${r.value}</span></div>`
@@ -1148,18 +1153,17 @@ function triggerLevelUp() {
 
 function showCardSelection(cards) {
   const overlay = document.getElementById('card-overlay')
-  document.getElementById('card-level-sub').textContent = `레벨 ${run.level} 달성 — 카드를 선택하세요`
+  document.getElementById('card-level-sub').textContent = t('levelUpSub', run.level)
   const row = document.getElementById('card-row')
   row.innerHTML = ''
-  const tierNames = { common:'일반', uncommon:'고급', rare:'희귀', legendary:'전설' }
   cards.forEach(card => {
     const div = document.createElement('div')
     div.className = `card ${card.tier}`
     div.innerHTML = `
       <div class="c-icon">${card.icon}</div>
-      <div class="c-name">${card.name}</div>
-      <div class="c-tier">${tierNames[card.tier] || card.tier}</div>
-      <div class="c-desc">${card.desc}</div>
+      <div class="c-name">${cardName(card)}</div>
+      <div class="c-tier">${t(`tier_${card.tier}`)}</div>
+      <div class="c-desc">${cardDesc(card)}</div>
     `
     div.addEventListener('click', () => {
       applyCard(card)
@@ -1214,9 +1218,9 @@ function onRoundEnd() {
   if (numEl) numEl.textContent = roundNum
   if (statsDiv) {
     const rows = [
-      { label: '🪵 획득한 통나무', value: `+${roundStats.logsEarned}` },
-      { label: '💰 획득한 골드',   value: `+${roundStats.goldEarned}` },
-      { label: '🪓 도끼질 횟수',   value: `${roundStats.chopCount}회` },
+      { label: t('roundLogsEarned'), value: `+${roundStats.logsEarned}` },
+      { label: t('roundGoldEarned'), value: `+${roundStats.goldEarned}` },
+      { label: t('roundChopCount'),  value: `${roundStats.chopCount}${t('chopCountUnit')}` },
     ]
     statsDiv.innerHTML = rows.map(r =>
       `<div class="runend-stat">${r.label}<span>${r.value}</span></div>`
@@ -1250,7 +1254,7 @@ window.openUpgradePanel = function (tab = 'skill') {
   ov.classList.add('open')
   // Update "next round" button label
   const nb = document.getElementById('upgrade-next-btn')
-  if (nb) nb.textContent = '▶ 다음 라운드 시작'
+  if (nb) nb.textContent = t('nextRoundStart')
   switchUpgradeTab(tab)
 }
 
@@ -1306,14 +1310,14 @@ function renderTeamTab() {
     div.className = `team-slot${isActive ? ' active' : ''}${isNext ? ' next-slot' : ''}${isLocked ? ' locked-slot' : ''}`
     div.innerHTML = `
       <div class="ts-icon">${isActive ? '👷' : isNext ? '❓' : '🔒'}</div>
-      <div class="ts-name">벌목꾼 ${i + 1}</div>
+      <div class="ts-name">${t('lumberjack')} ${i + 1}</div>
       <div class="ts-status">${
-        isSkillWorker ? '스킬 트리' :
-        isHired ? '고용됨 ✓' :
-        isNext ? `🪵 ${fmt(cost)} 로그` :
-        '잠금'
+        isSkillWorker ? t('statusSkill') :
+        isHired ? t('statusHired') :
+        isNext ? t('statusCost', fmt(cost)) :
+        t('statusLocked')
       }</div>
-      ${isNext ? `<button class="hire-btn" onclick="hireWorker()" ${canAfford ? '' : 'disabled'}>${canAfford ? '고용하기' : '🪵 부족'}</button>` : ''}
+      ${isNext ? `<button class="hire-btn" onclick="hireWorker()" ${canAfford ? '' : 'disabled'}>${canAfford ? t('btnHire') : t('btnInsuff')}</button>` : ''}
     `
     grid.appendChild(div)
   }
@@ -1340,7 +1344,7 @@ window.openAchievements = () => openUpgradePanel('ach')
 
 window.giveUpRun = () => {
   if (gamePhase !== 'running') return
-  if (!confirm('런을 포기하시겠습니까?')) return
+  if (!confirm(t('confirmGiveUp'))) return
   gamePhase = 'run_end'
   showRunEnd()
 }
@@ -1360,42 +1364,44 @@ document.addEventListener('pointerdown', _tryStartBgm, { once: true })
 document.addEventListener('keydown',     _tryStartBgm, { once: true })
 
 // ── 언어 시스템 ──
-window.gameLanguage = localStorage.getItem('gameLanguage') || 'ko'
-
-const I18N = {
-  ko: {
-    settings:'설정', language:'언어 / Language', selectLang:'언어 선택',
-    volume:'볼륨', sfxVolume:'효과음 볼륨', nowPlaying:'현재 재생', playlist:'플레이리스트',
-    noTracks:'src/assets/bgm/ 폴더에 mp3 파일을 넣어주세요',
-    danger:'위험', giveUp:'🏳️ 런 포기', close:'✕ 닫기',
-  },
-  en: {
-    settings:'Settings', language:'Language', selectLang:'Select Language',
-    volume:'Volume', sfxVolume:'SFX Volume', nowPlaying:'Now Playing', playlist:'Playlist',
-    noTracks:'Add mp3 files to src/assets/bgm/ folder',
-    danger:'Danger Zone', giveUp:'🏳️ Give Up Run', close:'✕ Close',
-  },
-}
+// All translation strings live in src/i18n.js. Default is English.
+window.gameLanguage = getLanguage()
 
 function _applyI18n() {
-  const t = I18N[window.gameLanguage] || I18N.ko
+  // Update [data-i18n] attributes (textContent).
   document.querySelectorAll('[data-i18n]').forEach(el => {
     const key = el.getAttribute('data-i18n')
-    if (t[key]) el.textContent = t[key]
+    const val = t(key)
+    if (val !== key) el.textContent = val
   })
+  // Update [data-i18n-btn] attributes (button labels).
   document.querySelectorAll('[data-i18n-btn]').forEach(el => {
     const key = el.getAttribute('data-i18n-btn')
-    if (t[key]) el.textContent = t[key]
+    const val = t(key)
+    if (val !== key) el.textContent = val
   })
-  document.getElementById('lang-ko').classList.toggle('active', window.gameLanguage === 'ko')
-  document.getElementById('lang-en').classList.toggle('active', window.gameLanguage === 'en')
+  // Toggle the language selector pill.
+  const lk = document.getElementById('lang-ko')
+  const le = document.getElementById('lang-en')
+  if (lk) lk.classList.toggle('active', window.gameLanguage === 'ko')
+  if (le) le.classList.toggle('active', window.gameLanguage === 'en')
+  // Update <html lang="..."> for accessibility.
+  document.documentElement.setAttribute('lang', window.gameLanguage)
 }
 
 window.setLanguage = (lang) => {
+  i18nSetLanguage(lang)
   window.gameLanguage = lang
-  localStorage.setItem('gameLanguage', lang)
   _applyI18n()
+  // Rebuild any open dynamic UI so labels switch live.
+  try { renderSkillTree() } catch {}
+  try { renderAchievements() } catch {}
+  try { if (typeof renderTeamTab === 'function') renderTeamTab() } catch {}
+  try { refreshBgmUI() } catch {}
 }
+
+// Notify other modules whenever the language changes.
+i18nSubscribe((lang) => { window.gameLanguage = lang })
 
 // ── Settings Overlay ──
 window.openSettings = () => {
@@ -1455,8 +1461,7 @@ window.refreshBgmUI = () => {
   }
 
   if (BGM.playlist.length === 0) {
-    const t = I18N[window.gameLanguage] || I18N.ko
-    list.innerHTML = `<p class="bgm-none">${t.noTracks}</p>`
+    list.innerHTML = `<p class="bgm-none">${t('noTracks')}</p>`
     return
   }
 
@@ -1507,7 +1512,7 @@ function updateHUD() {
 function updateActiveCards() {
   // Cards displayed on canvas in drawCanvasHUD
 }
-function onAchievement(ach) { achNotif = { name: ach.name, icon: ach.icon, timer: 200 } }
+function onAchievement(ach) { achNotif = { name: achName(ach), icon: ach.icon, timer: 200 } }
 function fmt(n) {
   if (n >= 1e9) return (n / 1e9).toFixed(1) + 'B'
   if (n >= 1e6) return (n / 1e6).toFixed(1) + 'M'
@@ -1784,8 +1789,8 @@ function drawHints() {
 
     // Title
     ctx.fillStyle = 'rgba(220,230,210,0.90)'
-    ctx.font = 'bold 12px "Segoe UI"'; ctx.textAlign = 'center'; ctx.textBaseline = 'top'
-    ctx.fillText('사용', cx, by + 10)
+    ctx.font = 'bold 12px "Gowun Dodum", "Segoe UI"'; ctx.textAlign = 'center'; ctx.textBaseline = 'top'
+    ctx.fillText(t('use'), cx, by + 10)
 
     // Key icons row
     const ky = by + 32, ks = 28  // key y, key size
@@ -1799,19 +1804,19 @@ function drawHints() {
       ctx.beginPath(); ctx.roundRect(kx[i], ky, ks, ks, 5); ctx.stroke()
       // Key label
       ctx.fillStyle = '#e8ecd8'
-      ctx.font = `bold ${k.length > 1 ? 14 : 15}px "Segoe UI"`
+      ctx.font = `bold ${k.length > 1 ? 14 : 15}px "Gowun Dodum", "Segoe UI"`
       ctx.textAlign = 'center'; ctx.textBaseline = 'middle'
       ctx.fillText(k, kx[i] + ks / 2, ky + ks / 2)
     })
-    // "또는" between A/D and arrows
+    // "or" between A/D and arrows
     ctx.fillStyle = 'rgba(180,200,160,0.70)'
-    ctx.font = '10px "Segoe UI"'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'
-    ctx.fillText('또는', cx + 2, ky + ks / 2)
+    ctx.font = '10px "Gowun Dodum", "Segoe UI"'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'
+    ctx.fillText(t('or'), cx + 2, ky + ks / 2)
 
-    // "이동" label
+    // "move" label
     ctx.fillStyle = 'rgba(220,230,210,0.85)'
-    ctx.font = '11px "Segoe UI"'; ctx.textAlign = 'center'; ctx.textBaseline = 'top'
-    ctx.fillText('이동', cx, ky + ks + 6)
+    ctx.font = '11px "Gowun Dodum", "Segoe UI"'; ctx.textAlign = 'center'; ctx.textBaseline = 'top'
+    ctx.fillText(t('move'), cx, ky + ks + 6)
 
     ctx.restore()
   }
@@ -1955,11 +1960,11 @@ function drawCanvasHUD() {
   ctx.textAlign = 'center'; ctx.textBaseline = 'middle'
   ctx.shadowColor = isUrgent ? 'rgba(255,80,0,0.6)' : 'rgba(0,0,0,0.5)'
   ctx.shadowBlur = isUrgent ? 8 : 3
-  ctx.fillText(gamePhase === 'round_end' ? '종료!' : `0:${secsLeft.toString().padStart(2, '0')}`, w / 2, 6 + tmH / 2)
+  ctx.fillText(gamePhase === 'round_end' ? t('timeUp') : `0:${secsLeft.toString().padStart(2, '0')}`, w / 2, 6 + tmH / 2)
   ctx.shadowBlur = 0
 
   // Round badge
-  ctx.font = `bold ${Math.round(Math.min(9 * S, 13))}px "Segoe UI"`
+  ctx.font = `bold ${Math.round(Math.min(9 * S, 13))}px "Gowun Dodum", "Segoe UI"`
   ctx.fillStyle = 'rgba(180,160,255,0.80)'
   ctx.textAlign = 'center'; ctx.textBaseline = 'top'
   ctx.fillText(`R${roundNum}`, w / 2 + tmW / 2 - Math.round(16 * S), 10)
@@ -1968,9 +1973,9 @@ function drawCanvasHUD() {
   ctx.font = `${Math.round(Math.min(16 * S, pauseS * 0.45))}px Segoe UI`
   ctx.textAlign = 'center'; ctx.textBaseline = 'middle'
   ctx.fillText('⚙️', pauseX + pauseS / 2, 8 + pauseS * 0.38)
-  ctx.font = `bold ${Math.round(Math.min(8 * S, pauseS * 0.22))}px "Segoe UI"`
+  ctx.font = `bold ${Math.round(Math.min(8 * S, pauseS * 0.22))}px "Gowun Dodum", "Segoe UI"`
   ctx.fillStyle = '#8090b0'
-  ctx.fillText(window.gameLanguage === 'en' ? 'MENU' : '설정', pauseX + pauseS / 2, 8 + pauseS * 0.75)
+  ctx.fillText(t('menu'), pauseX + pauseS / 2, 8 + pauseS * 0.75)
 
   // ─── Bottom-left: chop range indicator ───
   const distToTree = Math.abs(char.x - tree.cx)
@@ -1982,10 +1987,10 @@ function drawCanvasHUD() {
     _woodBox(bx2, bY2 - bH2, bW2, bH2, 4)
     const chopPulse = 0.7 + Math.sin(Date.now() / 140) * 0.3
     ctx.globalAlpha = chopPulse
-    ctx.font = `bold ${Math.round(9 * S)}px "Segoe UI"`
+    ctx.font = `bold ${Math.round(9 * S)}px "Gowun Dodum", "Segoe UI"`
     ctx.fillStyle = '#a0ffb0'
     ctx.textAlign = 'center'; ctx.textBaseline = 'middle'
-    ctx.fillText('🪓 자동 벌목 중', bx2 + bW2 / 2, bY2 - bH2 / 2)
+    ctx.fillText(t('autoChopping'), bx2 + bW2 / 2, bY2 - bH2 / 2)
     ctx.globalAlpha = 1
   }
 
@@ -1994,11 +1999,11 @@ function drawCanvasHUD() {
   ctx.font = '11px Segoe UI'; ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic'
   if (tree?.frozen) {
     ctx.fillStyle = '#87CEEB'
-    ctx.fillText(`❄️ 빙결 ${Math.ceil(tree.frozenTimer / 60)}s`, barX + barW + 10, sy); sy -= 16
+    ctx.fillText(`❄️ ${t('statusFrozen')} ${Math.ceil(tree.frozenTimer / 60)}s`, barX + barW + 10, sy); sy -= 16
   }
   if (tree?.burning) {
     ctx.fillStyle = '#FF8050'
-    ctx.fillText(`🔥 연소 ${Math.ceil(tree.burnTimer / 60)}s`, barX + barW + 10, sy)
+    ctx.fillText(`🔥 ${t('statusBurning')} ${Math.ceil(tree.burnTimer / 60)}s`, barX + barW + 10, sy)
   }
 }
 
@@ -2013,7 +2018,7 @@ function drawAchievementNotif() {
   ctx.fillStyle = '#1e2235'; ctx.strokeStyle = '#f59e0b'; ctx.lineWidth = 1.5
   ctx.beginPath(); ctx.roundRect(bx, by, bw, bh, 8); ctx.fill(); ctx.stroke()
   ctx.fillStyle = '#f59e0b'; ctx.font = '11px Segoe UI'; ctx.textAlign = 'center'
-  ctx.fillText('🏆 업적 달성!', canvas.width / 2, by + 17)
+  ctx.fillText(t('achUnlocked'), canvas.width / 2, by + 17)
   ctx.fillStyle = '#fff'; ctx.font = 'bold 12px Segoe UI'
   ctx.fillText(`${achNotif.icon} ${achNotif.name}`, canvas.width / 2, by + 33)
   ctx.restore()

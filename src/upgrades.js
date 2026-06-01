@@ -1,6 +1,15 @@
+import { t } from './i18n.js'
+
+// NOTE: this module is currently unused by main.js (legacy code). It is kept
+// for compatibility but all user-facing strings now route through i18n.
+//
+// Upgrades expose `name`/`desc` as getters so the active language is reflected
+// even if an Upgrade instance is created once and held for the lifetime of
+// the run.
+
 export class Upgrade {
-  constructor({ name, icon, baseCost, costScale, maxLevel, hidden, descFn, buyFn }) {
-    this.name = name
+  constructor({ nameKey, icon, baseCost, costScale, maxLevel, hidden, descFn, buyFn }) {
+    this.nameKey = nameKey
     this.icon = icon
     this.baseCost = baseCost
     this.costScale = costScale
@@ -11,6 +20,8 @@ export class Upgrade {
     this.level = 0
     this.unlocked = !hidden
   }
+
+  get name() { return t(this.nameKey) }
 
   currentCost() {
     return Math.floor(this.baseCost * Math.pow(this.costScale, this.level))
@@ -29,77 +40,75 @@ export class UpgradeSystem {
   constructor(state) {
     this.all = [
       new Upgrade({
-        name: '도끼 강화',
+        nameKey: 'skill_axe_name',
         icon: '🪓',
         baseCost: 10,
         costScale: 1.6,
-        descFn: (lv) => `타격 데미지 +1 (현재: ${1 + lv})`,
+        descFn: (lv) => `${t('skillCurrent', `+${1 + lv}`)}`,
         buyFn: (s) => { s.damage += 1 },
       }),
       new Upgrade({
-        name: '날카로운 날',
+        nameKey: 'card_crit1_name',
         icon: '⚡',
         baseCost: 50,
         costScale: 2.0,
         maxLevel: 10,
-        descFn: (lv) => `데미지 +3 (현재: ${1 + lv * 3})`,
+        descFn: (lv) => `${t('skillCurrent', `+${1 + lv * 3}`)}`,
         buyFn: (s) => { s.damage += 3 },
       }),
       new Upgrade({
-        name: '통나무 전문가',
+        nameKey: 'skill_log_expert_name',
         icon: '🪵',
         baseCost: 30,
         costScale: 1.8,
         maxLevel: 10,
-        descFn: (lv) => `통나무 획득량 +1 (현재: ×${1 + lv})`,
+        descFn: (lv) => `${t('skillCurrent', `×${1 + lv}`)}`,
         buyFn: (s) => { s.logMultiplier += 1 },
       }),
       new Upgrade({
-        name: '금맥 발견',
+        nameKey: 'skill_gold_digger_name',
         icon: '💎',
         baseCost: 40,
         costScale: 1.9,
         maxLevel: 10,
-        descFn: (lv) => `골드 획득량 +1 (현재: ×${1 + lv})`,
+        descFn: (lv) => `${t('skillCurrent', `×${1 + lv}`)}`,
         buyFn: (s) => { s.goldMultiplier += 1 },
       }),
       new Upgrade({
-        name: '자동 벌목기',
+        nameKey: 'skill_autopilot_name',
         icon: '🤖',
         baseCost: 200,
         costScale: 3.0,
         maxLevel: 8,
-        descFn: (lv) => lv === 0
-          ? '자동으로 나무를 벱니다 (0.5회/초)'
-          : `자동벌목 속도 +0.5회/초 (현재: ${0.5 + lv * 0.5}회/초)`,
+        descFn: (lv) => `${t('skillCurrent', `${0.5 + lv * 0.5}/s`)}`,
         buyFn: (s) => { s.autoChopSpeed += 0.5 },
       }),
       new Upgrade({
-        name: '폭발 도끼',
+        nameKey: 'card_dmg_mult_name',
         icon: '💥',
         baseCost: 500,
         costScale: 2.5,
         maxLevel: 5,
-        descFn: (lv) => `타격 데미지 ×2 (현재: 스택 ${lv})`,
+        descFn: (lv) => `${t('skillCurrent', `×${Math.pow(2, lv)}`)}`,
         buyFn: (s) => { s.damage *= 2 },
       }),
       new Upgrade({
-        name: '황금 도끼',
+        nameKey: 'card_goldrush_name',
         icon: '🏆',
         baseCost: 1000,
         costScale: 3.5,
         maxLevel: 5,
-        descFn: (lv) => `골드 배수 ×2 (현재: ×${Math.pow(2, lv)})`,
+        descFn: (lv) => `${t('skillCurrent', `×${Math.pow(2, lv)}`)}`,
         buyFn: (s) => { s.goldMultiplier *= 2 },
       }),
       new Upgrade({
-        name: '번개 도끼',
+        nameKey: 'card_godaxe_name',
         icon: '⚡🪓',
         baseCost: 2000,
         costScale: 4.0,
         maxLevel: 3,
         hidden: true,
-        descFn: (lv) => `10% 확률로 데미지 10배 (레벨 ${lv + 1})`,
+        descFn: (lv) => `Lv ${lv + 1}`,
         buyFn: (s) => { s.damage += 10 },
       }),
     ]
@@ -111,7 +120,7 @@ export class UpgradeSystem {
   _watchState(state) {
     const autoCheck = setInterval(() => {
       if (state.gold >= 500) {
-        const thunder = this.all.find(u => u.name === '번개 도끼')
+        const thunder = this.all.find(u => u.nameKey === 'card_godaxe_name')
         if (thunder) thunder.unlocked = true
       }
     }, 1000)

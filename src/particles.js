@@ -1,4 +1,5 @@
 import { Graphics, Text, TextStyle, Container } from 'pixi.js'
+import { t } from './i18n.js'
 
 class Particle {
   constructor(stage, x, y, text, color, vx, vy) {
@@ -104,7 +105,7 @@ export class ParticleSystem {
   spawnBigReward(x, y, gold) {
     this.particles.push(new Particle(
       this.stage, x, y,
-      `🎉 보너스 +${gold}골드!`,
+      t('bonusGold', gold),
       '#f59e0b',
       0,
       -6

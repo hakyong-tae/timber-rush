@@ -1,4 +1,5 @@
 import { run } from './state.js'
+import { t } from './i18n.js'
 
 // ── 스프라이트 임포트 ──
 import srcBasic  from './assets/tree_basic.webp'
@@ -62,19 +63,14 @@ _loadSprite('fire',   srcFire)
 _loadSprite('shadow', srcShadow)
 
 // ── 특수 나무 타입 정의 ──
+// Static metadata only — display name/desc resolved through i18n at access time.
 export const TREE_TYPES = {
-  basic:  { key:'basic',  name:'기본 나무', emoji:'🌲',
-    bonusType: null,      unlockRound: 1,  desc:'평범한 나무' },
-  golden: { key:'golden', name:'황금 나무', emoji:'✨',
-    bonusType: 'golden',  unlockRound: 6,  desc:'황금 통나무가 많이 나온다' },
-  frozen: { key:'frozen', name:'얼음 나무', emoji:'❄️',
-    bonusType: 'freeze',  unlockRound: 8,  desc:'항상 얼어있다. 얼음 통나무가 많이 나온다' },
-  venom:  { key:'venom',  name:'독 나무',   emoji:'☠️',
-    bonusType: 'magnet',  unlockRound: 12, desc:'자석 통나무가 많이 나온다' },
-  fire:   { key:'fire',   name:'불꽃 나무', emoji:'🔥',
-    bonusType: 'fire',    unlockRound: 15, desc:'항상 불타고 있다. 불 통나무가 많이 나온다' },
-  shadow: { key:'shadow', name:'암흑 나무', emoji:'💀',
-    bonusType: 'explosive', unlockRound: 20, desc:'폭발 통나무가 많이 나온다' },
+  basic:  { key:'basic',  nameKey:'tree_basic_name',  descKey:'tree_basic_desc',  emoji:'🌲', bonusType: null,        unlockRound: 1 },
+  golden: { key:'golden', nameKey:'tree_golden_name', descKey:'tree_golden_desc', emoji:'✨', bonusType: 'golden',    unlockRound: 6 },
+  frozen: { key:'frozen', nameKey:'tree_frozen_name', descKey:'tree_frozen_desc', emoji:'❄️', bonusType: 'freeze',    unlockRound: 8 },
+  venom:  { key:'venom',  nameKey:'tree_venom_name',  descKey:'tree_venom_desc',  emoji:'☠️', bonusType: 'magnet',    unlockRound: 12 },
+  fire:   { key:'fire',   nameKey:'tree_fire_name',   descKey:'tree_fire_desc',   emoji:'🔥', bonusType: 'fire',      unlockRound: 15 },
+  shadow: { key:'shadow', nameKey:'tree_shadow_name', descKey:'tree_shadow_desc', emoji:'💀', bonusType: 'explosive', unlockRound: 20 },
 }
 
 export function getAvailableTreeTypes(round) {
@@ -156,7 +152,7 @@ export class Tree {
     this.trunkW = 80
   }
 
-  get name()  { return this._typeData.name }
+  get name()  { return t(this._typeData.nameKey) }
   get emoji() { return this._typeData.emoji }
 
   // 현재 캔버스에서 실제로 렌더되는 나무 높이 (스프라이트 종횡비 반영)
@@ -246,7 +242,7 @@ export class Tree {
     const ctx  = this.ctx
     const td   = this._typeData
     const gY   = this.ch * 0.80
-    const label = `${td.emoji} ${td.name}`
+    const label = `${td.emoji} ${t(td.nameKey)}`
     ctx.font = 'bold 12px "Segoe UI"'
     const tw = ctx.measureText(label).width
     const bw = tw + 20, bh = 22
